@@ -13,7 +13,7 @@ Build a tiny, hackable, MIT-licensed engine you can learn from scratch:
 - [x] M1: Window + Loop (GLFW + Log + Time)
 - [x] M2: Triangle (OpenGL 4.6 Core + glad + Shader + VAO/VBO)
 - [x] M3: Core utils (Math/glm + Input + File)
-- [ ] M4: Renderer abstraction (GL / GLES)
+- [x] M4: Renderer abstraction (Renderer + OpenGLRenderer + RenderCommand)
 - [ ] M5: Scene / Entity
 - [ ] M6: Assets + Audio
 - [ ] M7: Editor

@@ -8,6 +8,8 @@ add_library(ArcEngine STATIC
   src/Renderer/GraphicsContext.cpp
   src/Renderer/Shader.cpp
   src/Renderer/Buffer.cpp
+  src/Renderer/OpenGLRenderer.cpp
+  src/Renderer/RenderCommand.cpp
 )
 
 target_include_directories(ArcEngine PUBLIC
