@@ -73,6 +73,16 @@ void Shader::SetVec2(const std::string& name, float x, float y) const {
     if (loc >= 0) glUniform2f(loc, x, y);
 }
 
+void Shader::SetVec3(const std::string& name, float x, float y, float z) const {
+    int loc = glGetUniformLocation(m_id, name.c_str());
+    if (loc >= 0) glUniform3f(loc, x, y, z);
+}
+
+void Shader::SetMat4(const std::string& name, const float* data) const {
+    int loc = glGetUniformLocation(m_id, name.c_str());
+    if (loc >= 0) glUniformMatrix4fv(loc, 1, GL_FALSE, data);
+}
+
 void Shader::SetInt(const std::string& name, int v) const {
     int loc = glGetUniformLocation(m_id, name.c_str());
     if (loc >= 0) glUniform1i(loc, v);

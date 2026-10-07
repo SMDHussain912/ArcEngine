@@ -24,6 +24,8 @@ public:
 
     void SetFloat(const std::string& name, float v) const;
     void SetVec2(const std::string& name, float x, float y) const;
+    void SetVec3(const std::string& name, float x, float y, float z) const;
+    void SetMat4(const std::string& name, const float* data) const;
     void SetInt(const std::string& name, int v) const;
 
     static Shader FromFiles(const std::string& vertexPath, const std::string& fragmentPath);
