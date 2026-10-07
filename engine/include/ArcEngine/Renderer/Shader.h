@@ -23,6 +23,7 @@ public:
     bool IsValid() const { return m_id != 0; }
 
     void SetFloat(const std::string& name, float v) const;
+    void SetVec2(const std::string& name, float x, float y) const;
     void SetInt(const std::string& name, int v) const;
 
     static Shader FromFiles(const std::string& vertexPath, const std::string& fragmentPath);

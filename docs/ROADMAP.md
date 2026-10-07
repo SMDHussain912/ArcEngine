@@ -20,8 +20,11 @@ Stack: `C++17 + OpenGL 4.6 -> GLES 3.2 + Lua 5.4 + sol2 + GLFW (Linux) -> SDL/EG
 - `assets/shaders/triangle.vert/frag` (#version 460 core, RGB triangle), `examples/02-triangle`
 - M1 apps ported to glad init; verified on Intel HD 620 Mesa 26.2.3: `OpenGL loaded: 4.6 (Core Profile)`
 
-## M3 Core utils
-- Vendored `glm` math, `Input` polling, `File` helpers
+## M3 Core utils [DONE]
+- `Math.h`: Vec2/3/4, Mat3/4, Quat over glm 1.0.3 + Translate/Rotate/Scale/Perspective/Ortho/LookAt/Lerp/Clamp
+- `Input`: Key/MouseButton polling, IsKeyDown/Pressed, MousePos, EndFrame edge detection
+- `File`: Exists/ReadText/ReadBinary/WriteText
+- `Shader::SetVec2` added; `examples/03-core-utils` = movable triangle (WASD, Space invert, click log)
 
 ## M4 Renderer abstraction (key for mobile)
 - `Renderer` interface -> `OpenGLRenderer` (4.6) / `OpenGLESRenderer` (3.2)
