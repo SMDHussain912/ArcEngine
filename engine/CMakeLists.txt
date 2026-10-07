@@ -10,6 +10,8 @@ add_library(ArcEngine STATIC
   src/Renderer/Buffer.cpp
   src/Renderer/OpenGLRenderer.cpp
   src/Renderer/RenderCommand.cpp
+  src/Renderer/Texture.cpp
+  src/Audio/Audio.cpp
   src/Scene/Scene.cpp
   src/Scene/MeshComponent.cpp
 )
@@ -30,9 +32,15 @@ find_package(glm REQUIRED)
 # Vendored glad2 loader (M2): Desktop GL 4.6 Core.
 add_subdirectory(${CMAKE_SOURCE_DIR}/third_party/glad ${CMAKE_BINARY_DIR}/third_party/glad)
 
+# Vendored stb headers (M6a): image loading, header-only.
+add_subdirectory(${CMAKE_SOURCE_DIR}/third_party/stb ${CMAKE_BINARY_DIR}/third_party/stb)
+
+# Vendored miniaudio (M6b): playback, single header. Needs pthread + m + dl on Linux.
+add_subdirectory(${CMAKE_SOURCE_DIR}/third_party/miniaudio ${CMAKE_BINARY_DIR}/third_party/miniaudio)
+
 target_include_directories(ArcEngine PUBLIC ${GLFW_INCLUDE_DIRS})
 target_link_directories(ArcEngine PUBLIC ${GLFW_LIBRARY_DIRS})
-target_link_libraries(ArcEngine PUBLIC ${GLFW_LIBRARIES} OpenGL::GL glad glm::glm)
+target_link_libraries(ArcEngine PUBLIC ${GLFW_LIBRARIES} OpenGL::GL glad stb miniaudio glm::glm pthread m dl)
 target_compile_options(ArcEngine PUBLIC ${GLFW_CFLAGS_OTHER})
 
 set_target_properties(ArcEngine PROPERTIES
