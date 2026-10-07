@@ -3,7 +3,10 @@
 #include "ArcEngine/Core/Log.h"
 #include "ArcEngine/Core/Time.h"
 #include "ArcEngine/Core/Window.h"
+#include "ArcEngine/Renderer/GraphicsContext.h"
 
+#include <glad/gl.h>
+#define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
 int main() {
@@ -17,6 +20,9 @@ int main() {
 
     Arc::Window window(props);
     if (!window.IsValid()) return 1;
+
+    // M2: 4.6 Core needs glad entry points before any gl* call.
+    if (!Arc::GraphicsContext::Init()) return 1;
 
     Arc::Time clock;
     while (!window.ShouldClose()) {

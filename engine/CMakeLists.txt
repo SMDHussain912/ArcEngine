@@ -3,6 +3,9 @@ add_library(ArcEngine STATIC
   src/Core/Log.cpp
   src/Core/Time.cpp
   src/Core/Window.cpp
+  src/Renderer/GraphicsContext.cpp
+  src/Renderer/Shader.cpp
+  src/Renderer/Buffer.cpp
 )
 
 target_include_directories(ArcEngine PUBLIC
@@ -15,9 +18,12 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(GLFW REQUIRED glfw3)
 find_package(OpenGL REQUIRED)
 
+# Vendored glad2 loader (M2): Desktop GL 4.6 Core.
+add_subdirectory(${CMAKE_SOURCE_DIR}/third_party/glad ${CMAKE_BINARY_DIR}/third_party/glad)
+
 target_include_directories(ArcEngine PUBLIC ${GLFW_INCLUDE_DIRS})
 target_link_directories(ArcEngine PUBLIC ${GLFW_LIBRARY_DIRS})
-target_link_libraries(ArcEngine PUBLIC ${GLFW_LIBRARIES} OpenGL::GL)
+target_link_libraries(ArcEngine PUBLIC ${GLFW_LIBRARIES} OpenGL::GL glad)
 target_compile_options(ArcEngine PUBLIC ${GLFW_CFLAGS_OTHER})
 
 set_target_properties(ArcEngine PROPERTIES

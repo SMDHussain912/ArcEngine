@@ -2,7 +2,10 @@
 #include "ArcEngine/Core/Time.h"
 #include "ArcEngine/Core/Version.h"
 #include "ArcEngine/Core/Window.h"
+#include "ArcEngine/Renderer/GraphicsContext.h"
 
+#include <glad/gl.h>
+#define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include <string>
 
@@ -20,6 +23,9 @@ int main() {
         Arc::Log::Error("Failed to create window. Exiting.");
         return 1;
     }
+
+    // M2: load GL entry points now that 4.6 Core context is current.
+    if (!Arc::GraphicsContext::Init()) return 1;
 
     Arc::Time clock;
     double titleTimer = 0.0;

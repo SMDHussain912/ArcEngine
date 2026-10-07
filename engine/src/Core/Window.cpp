@@ -1,6 +1,10 @@
 #include "ArcEngine/Core/Window.h"
 #include "ArcEngine/Core/Log.h"
 
+// M2: glad FIRST, then GLFW with no system GL headers.
+// glad provides all GL entry points for 4.6 Core; GLFW must not pull gl.h.
+#include <glad/gl.h>
+#define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
 namespace Arc {
@@ -39,11 +43,16 @@ void Window::Init(const WindowProps& props) {
     }
     s_glfwRefCount++;
 
-    // M1: plain OpenGL context window. M2 adds glad loader + version hints.
+    // M2: request explicit OpenGL 4.6 Core. M1 used compat defaults.
     glfwDefaultWindowHints();
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, props.GLMajor);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, props.GLMinor);
+    glfwWindowHint(GLFW_OPENGL_PROFILE,
+                   props.GLCoreProfile ? GLFW_OPENGL_CORE_PROFILE : GLFW_OPENGL_ANY_PROFILE);
+#ifdef __APPLE__
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
+#endif
     glfwWindowHint(GLFW_RESIZABLE, props.Resizable ? GLFW_TRUE : GLFW_FALSE);
-    // Keep compat defaults for M1 so glClear works without a loader.
-    // M2 will request 4.6 Core explicitly.
 
     m_handle = glfwCreateWindow(static_cast<int>(m_props.Width),
                                 static_cast<int>(m_props.Height),
