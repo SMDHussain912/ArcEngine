@@ -33,8 +33,10 @@ Stack: `C++17 + OpenGL 4.6 -> GLES 3.2 + Lua 5.4 + sol2 + GLFW (Linux) -> SDL/EG
 - Fixed `Input::EndFrame` valid key ranges (32-96, 256-348); was spamming `Invalid key 349`
 - `examples/04-renderer`: triangle via abstraction only, WASD moves
 
-## M5 Scene / Entities
-- `Scene, Entity, TransformComponent`
+## M5 Scene / Entities [DONE]
+- `TransformComponent` (pos/rot/scale + GetMatrix), `Entity` handle, `Scene` registry
+- `MeshComponent` (Triangle/Quad + Upload + DrawMesh with u_Model), `Shader::SetVec3/SetMat4`
+- `examples/05-scene`: Player + Enemy triangles, WASD vs arrows, enemy spins
 
 ## M6 Assets + Audio
 - `stb_image` textures, shader reload, `miniaudio`
