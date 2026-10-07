@@ -13,10 +13,12 @@ Stack: `C++17 + OpenGL 4.6 -> GLES 3.2 + Lua 5.4 + sol2 + GLFW (Linux) -> SDL/EG
 - Main loop with `glClear` pulse (no shaders yet — M2), `examples/01-window`
 - Verified on Intel HD 620: both binaries open windows, run loop, exit 124 on timeout (expected)
 
-## M2 Triangle [NEXT]
-- `glad2` loader, `Shader`, `Buffer`, `OpenGLRenderer`
-- `examples/02-triangle`, shaders in `assets/shaders/`
-- Request OpenGL 4.6 Core explicitly (M1 used compat defaults)
+## M2 Triangle [DONE]
+- Vendored `glad2` (Desktop GL 4.6 Core) in `third_party/glad/` + `glad` static lib
+- `engine/renderer/GraphicsContext` (gladLoadGL via GLFW), `Shader` (compile/link/file), `Buffer` (VBO/IBO/VAO)
+- `Window` now requests 4.6 Core explicitly + `GLFW_INCLUDE_NONE` everywhere (glad owns GL headers)
+- `assets/shaders/triangle.vert/frag` (#version 460 core, RGB triangle), `examples/02-triangle`
+- M1 apps ported to glad init; verified on Intel HD 620 Mesa 26.2.3: `OpenGL loaded: 4.6 (Core Profile)`
 
 ## M3 Core utils
 - Vendored `glm` math, `Input` polling, `File` helpers
