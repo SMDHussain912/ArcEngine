@@ -10,9 +10,9 @@ Build a tiny, hackable, MIT-licensed engine you can learn from scratch:
 
 ## Status
 - [x] M0: Foundation (CMake + git + GitHub)
-- [ ] M1: Window + Loop (GLFW)
-- [ ] M2: Triangle (OpenGL shaders)
-- [ ] M3: Core utils (Log, Time, Input)
+- [x] M1: Window + Loop (GLFW + Log + Time)
+- [ ] M2: Triangle (OpenGL shaders + glad)
+- [ ] M3: Core utils (glm, Input, File)
 - [ ] M4: Renderer abstraction (GL / GLES)
 - [ ] M5: Scene / Entity
 - [ ] M6: Assets + Audio
@@ -28,15 +28,16 @@ cd ArcEngine
 mkdir build && cd build
 cmake ..
 cmake --build .
-./runtime/ArcRuntime
+./runtime/ArcRuntime          # full runtime (1280x720, FPS in title, ESC to close)
+./examples/01-window/01-window # minimal example (960x540)
 ```
 
-Requirements: `g++ (>=11), cmake (>=3.18), glfw3, lua5.4` on dev machine.
-Vendored builds (no system deps) coming in M1+ via `third_party/`.
+Requirements: `g++ (>=11), cmake (>=3.18), glfw3, libGL` on dev machine.
+Vendored builds (no system deps) coming via `third_party/`.
 
 ## Workflow
 ```bash
-git pull origin main
+git pull origin dev
 git checkout -b feature/xxx
 # ... code ...
 git push origin feature/xxx

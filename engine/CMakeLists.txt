@@ -1,12 +1,27 @@
 add_library(ArcEngine STATIC
   src/Core/Version.cpp
+  src/Core/Log.cpp
+  src/Core/Time.cpp
+  src/Core/Window.cpp
 )
 
 target_include_directories(ArcEngine PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
+# GLFW for windowing (M1). System package on Linux dev machine.
+# OpenGL for glClear in M1 loop (M2 adds glad loader, still needs libGL).
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GLFW REQUIRED glfw3)
+find_package(OpenGL REQUIRED)
+
+target_include_directories(ArcEngine PUBLIC ${GLFW_INCLUDE_DIRS})
+target_link_directories(ArcEngine PUBLIC ${GLFW_LIBRARY_DIRS})
+target_link_libraries(ArcEngine PUBLIC ${GLFW_LIBRARIES} OpenGL::GL)
+target_compile_options(ArcEngine PUBLIC ${GLFW_CFLAGS_OTHER})
+
 set_target_properties(ArcEngine PROPERTIES
   CXX_STANDARD 17
   CXX_STANDARD_REQUIRED ON
 )
+
