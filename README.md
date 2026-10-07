@@ -11,7 +11,7 @@ Build a tiny, hackable, MIT-licensed engine you can learn from scratch:
 ## Status
 - [x] M0: Foundation (CMake + git + GitHub)
 - [x] M1: Window + Loop (GLFW + Log + Time)
-- [ ] M2: Triangle (OpenGL shaders + glad)
+- [x] M2: Triangle (OpenGL 4.6 Core + glad + Shader + VAO/VBO)
 - [ ] M3: Core utils (glm, Input, File)
 - [ ] M4: Renderer abstraction (GL / GLES)
 - [ ] M5: Scene / Entity

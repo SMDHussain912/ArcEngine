@@ -12,9 +12,14 @@ struct WindowProps {
     uint32_t Height = 720;
     bool VSync = true;
     bool Resizable = true;
+    // M2: request explicit GL version. 4.6 Core on Linux desktop.
+    // M4/M8: Android will use GLES 3.2 via a different backend.
+    int GLMajor = 4;
+    int GLMinor = 6;
+    bool GLCoreProfile = true;
 };
 
-// Thin RAII wrapper over GLFW (M1).
+// Thin RAII wrapper over GLFW (M1+M2).
 // M4 will generalize this into a platform interface so Android
 // can swap GLFW -> EGL/NativeActivity without touching game code.
 class Window {
@@ -50,3 +55,4 @@ private:
 };
 
 } // namespace Arc
+
