@@ -14,7 +14,7 @@ Build a tiny, hackable, MIT-licensed engine you can learn from scratch:
 - [x] M2: Triangle (OpenGL 4.6 Core + glad + Shader + VAO/VBO)
 - [x] M3: Core utils (Math/glm + Input + File)
 - [x] M4: Renderer abstraction (Renderer + OpenGLRenderer + RenderCommand)
-- [ ] M5: Scene / Entity
+- [x] M5: Scene / Entity (Scene + Transform + Mesh)
 - [ ] M6: Assets + Audio
 - [ ] M7: Editor
 - [ ] M8: Android

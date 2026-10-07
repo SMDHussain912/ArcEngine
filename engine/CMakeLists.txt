@@ -10,6 +10,8 @@ add_library(ArcEngine STATIC
   src/Renderer/Buffer.cpp
   src/Renderer/OpenGLRenderer.cpp
   src/Renderer/RenderCommand.cpp
+  src/Scene/Scene.cpp
+  src/Scene/MeshComponent.cpp
 )
 
 target_include_directories(ArcEngine PUBLIC
