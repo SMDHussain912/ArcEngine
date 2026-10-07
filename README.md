@@ -15,7 +15,7 @@ Build a tiny, hackable, MIT-licensed engine you can learn from scratch:
 - [x] M3: Core utils (Math/glm + Input + File)
 - [x] M4: Renderer abstraction (Renderer + OpenGLRenderer + RenderCommand)
 - [x] M5: Scene / Entity (Scene + Transform + Mesh)
-- [ ] M6: Assets + Audio
+- [x] M6: Assets + Audio (Texture/stb + Audio/miniaudio)
 - [ ] M7: Editor
 - [ ] M8: Android
 - [ ] M9: Lua scripting
