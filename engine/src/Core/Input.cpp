@@ -72,11 +72,15 @@ Vec2 Input::MousePos() {
 
 void Input::EndFrame() {
     if (!s_window) return;
-    // Snapshot keys: poll the range we care about (32..349 covers Space..F-keys block)
     for (int i = 0; i < 512; i++) s_keysPrev[i] = s_keysNow[i];
     for (int i = 0; i < 8; i++) s_mousePrev[i] = s_mouseNow[i];
-    // Refresh current from GLFW for next frame's Pressed edge
-    for (int code = 32; code < 350; code++) {
+    // Refresh current from GLFW. Valid ranges: 32..96 (printable) and
+    // 256..348 (special: Escape..Menu). 349+ are invalid and warn in log.
+    for (int code = 32; code <= 96; code++) {
+        int st = glfwGetKey(s_window, code);
+        s_keysNow[code] = (st == GLFW_PRESS || st == GLFW_REPEAT);
+    }
+    for (int code = 256; code <= 348; code++) {
         int st = glfwGetKey(s_window, code);
         s_keysNow[code] = (st == GLFW_PRESS || st == GLFW_REPEAT);
     }

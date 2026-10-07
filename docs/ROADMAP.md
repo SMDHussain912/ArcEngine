@@ -26,8 +26,12 @@ Stack: `C++17 + OpenGL 4.6 -> GLES 3.2 + Lua 5.4 + sol2 + GLFW (Linux) -> SDL/EG
 - `File`: Exists/ReadText/ReadBinary/WriteText
 - `Shader::SetVec2` added; `examples/03-core-utils` = movable triangle (WASD, Space invert, click log)
 
-## M4 Renderer abstraction (key for mobile)
-- `Renderer` interface -> `OpenGLRenderer` (4.6) / `OpenGLESRenderer` (3.2)
+## M4 Renderer abstraction [DONE]
+- `Renderer` interface (BeginFrame/EndFrame/DrawArrays/DrawIndexed/SetViewport) + `CreateRenderer()` factory
+- `OpenGLRenderer` (4.6 Core, depth on) — M8 adds `OpenGLESRenderer` behind same factory
+- `RenderCommand` (SetClearColor/Clear/SetViewport) — game code never calls raw gl* for frame control
+- Fixed `Input::EndFrame` valid key ranges (32-96, 256-348); was spamming `Invalid key 349`
+- `examples/04-renderer`: triangle via abstraction only, WASD moves
 
 ## M5 Scene / Entities
 - `Scene, Entity, TransformComponent`
