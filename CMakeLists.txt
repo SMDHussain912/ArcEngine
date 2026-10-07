@@ -13,5 +13,6 @@ add_subdirectory(engine)
 add_subdirectory(runtime)
 
 if(ARC_BUILD_EXAMPLES)
-  # Examples added from M1 onwards
+  add_subdirectory(examples)
 endif()
+
