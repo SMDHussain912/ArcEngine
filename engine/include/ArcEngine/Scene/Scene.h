@@ -57,6 +57,10 @@ public:
         return ComponentPool<T>().at(id);
     }
 
+    // Selection + iteration order for the editor (M7).
+    Entity GetFocusEntity() const { return m_focus; }
+    void SetFocusEntity(Entity e) { m_focus = e; }
+
     // Iterate all entities having T (used by renderer + editor).
     template <typename T, typename Fn>
     void Each(Fn&& fn) {
@@ -92,6 +96,7 @@ private:
     std::unordered_map<std::type_index, std::any> m_pools;
     uint32_t m_nextId = 1;
     UpdateFn m_updateFn;
+    Entity m_focus; // editor selection (M7)
 };
 
 inline Entity::Entity(Scene* scene, uint32_t id) : m_scene(scene), m_id(id) {}

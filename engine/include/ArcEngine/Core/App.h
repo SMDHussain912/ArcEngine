@@ -2,6 +2,8 @@
 #include "ArcEngine/Assets/AssetManager.h"
 #include "ArcEngine/Core/Time.h"
 #include "ArcEngine/Core/Window.h"
+#include "ArcEngine/Editor/ArcEditor.h"
+#include "ArcEngine/Renderer/Renderer.h"
 #include "ArcEngine/Scene/Scene.h"
 
 #include <cstdint>
@@ -71,6 +73,13 @@ public:
     int Run();
     void RequestQuit();
 
+    // M7: in-editor view toggle (F1).
+    bool EditorVisible() const { return m_editorVisible; }
+
+    // M7: renderer accessor for the editor backend (stub, see Renderer::Renderer()
+    // in a later P0 step).
+    Renderer* renderer() { return nullptr; }
+
     // Valid inside callbacks (null before Run / after it returns).
     Window* GetWindow() { return m_window.get(); }
 
@@ -92,6 +101,12 @@ private:
     uint64_t m_physicsSteps = 0;
     bool m_quit = false;
     bool m_warnedSpiral = false;
+
+    // M7: headless editor windows (Hierarchy + Inspector + Viewport), rendered
+    // as an overlay over the game viewport; F1 toggles visibility.
+    bool m_editorAvailable = false;
+    bool m_editorVisible = true;
+    ArcEditor m_editor;
 
     UpdateFn m_onUpdate;
     PhysicsFn m_onPhysics;

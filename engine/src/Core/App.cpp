@@ -13,9 +13,11 @@
 
 namespace Arc {
 
-App::App(AppConfig cfg) : m_cfg(std::move(cfg)) {}
+App::App(AppConfig cfg) : m_cfg(std::move(cfg)), m_editorAvailable(true) {}
 
-App::~App() = default;
+App::~App() {
+    if (m_editorAvailable) m_editor.Shutdown();
+}
 
 void App::RequestQuit() {
     m_quit = true;
@@ -66,6 +68,14 @@ int App::Run() {
         Log::Info("App: project '" + m_project->Name + "' v" + m_project->Version +
                   (m_project->MainScene.empty() ? "" : ", main scene: " + m_project->MainScene));
 
+    // M7: editor window. Renders on top of the game view; F1 toggles.
+    if (m_editorAvailable) {
+        if (!m_editor.Init(*m_window, renderer(), m_scene))
+            Log::Warn("App: ArcEditor init failed; continuing without editor.");
+        else
+            Log::Info("App: ArcEditor initialized (ImGui + GLFW + OpenGL3).");
+    }
+
     while (!m_quit && !m_window->ShouldClose()) {
         if (m_cfg.MaxFrames > 0 && m_frames >= m_cfg.MaxFrames) {
             RequestQuit();
@@ -105,6 +115,18 @@ int App::Run() {
         if (m_onUpdate) m_onUpdate(m_clock.Delta());
         const float alpha = static_cast<float>(m_accumulator / step);
         if (m_onRender) m_onRender(alpha);
+
+        // M7: editor toggle + window draw (runs on top of the game viewport).
+        if (m_editorAvailable) {
+            if (Input::IsKeyPressed(Key::F1)) m_editorVisible = !m_editorVisible;
+            if (m_editorVisible) {
+                m_editor.BeginFrame();
+                m_editor.HierarchyWindow();
+                m_editor.InspectorWindow();
+                m_editor.ViewportWindow();
+                m_editor.EndFrame();
+            }
+        }
 
         // 5. Present + input edge bookkeeping for next frame.
         m_window->SwapBuffers();
