@@ -24,7 +24,6 @@ Goal: turn prototype into production base. No new gameplay yet.
       on load; Mesh/Texture/Lua serialize with their subsystems), **fixed M5 static
       pools → instance pools** (std::any-typed), deterministic `Entities()` order,
       `App::GetScene()` loads `main_scene`, `tests/test_scene` round-trip + isolation
-- [ ] `Audio/AudioServer` over **OpenAL**: device/context, Listener/Source/Buffer,
       `AudioPlayer2D/3D`, master/SFX/music buses; decode WAV (own) + OGG (stb_vorbis)
 - [ ] Remove `Audio` miniaudio class → keep file as `docs/legacy-miniaudio.md` note
 - [ ] `tests/`: headless `Scene save→load`, `AssetManager` round-trip
