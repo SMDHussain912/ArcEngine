@@ -15,6 +15,10 @@ class VertexBuffer;
 struct MeshComponent {
     std::vector<float> Vertices; // interleaved pos(3) + color(3)
     bool Uploaded = false;
+    // Editor/game mesh identity (for .arc files + primitive menu).
+    // Built-ins: triangle, quad, circle, ring, grid-plane, cross, arrow.
+    // 3D path (M10+): gltf:<path> / prim:cube|sphere — stubs reserved here.
+    std::string MeshId = "triangle";
 
     // GPU handles owned here (simple for M5; M6 moves to asset system).
     std::shared_ptr<VertexArray> Vao;
@@ -22,6 +26,12 @@ struct MeshComponent {
 
     static MeshComponent Triangle(const float rgb[3]);
     static MeshComponent Quad(const float rgb[3]);
+    static MeshComponent Circle(const float rgb[3], int segments = 24);
+    static MeshComponent Ring(const float rgb[3], float inner = 0.35f, int segments = 32);
+    static MeshComponent Plane(const float rgb[3], float size = 4.0f);
+    static MeshComponent Cross(const float rgb[3], float arm = 0.5f, float thick = 0.08f);
+    static MeshComponent Arrow(const float rgb[3], float len = 0.9f);
+    static MeshComponent FromId(const std::string& id, const float rgb[3]);
 
     void Upload();
 };

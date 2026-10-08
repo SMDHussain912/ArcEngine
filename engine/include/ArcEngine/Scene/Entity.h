@@ -39,6 +39,9 @@ public:
     template <typename T>
     const T& GetComponent() const;
 
+    template <typename T>
+    bool RemoveComponent();
+
     bool operator==(const Entity& o) const { return m_scene == o.m_scene && m_id == o.m_id; }
 
 private:

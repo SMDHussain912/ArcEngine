@@ -1,6 +1,7 @@
 #include "ArcEngine/Scene/SceneSerializer.h"
 #include "ArcEngine/Core/File.h"
 #include "ArcEngine/Core/Log.h"
+#include "ArcEngine/Scene/MeshComponent.h"
 
 #include <yaml-cpp/yaml.h>
 #include <fstream>
@@ -9,12 +10,22 @@ namespace Arc {
 
 namespace {
 
+const char* kFormat = "arc-scene-2";
+
 YAML::Node Vec3Node(const Vec3& v) {
     YAML::Node n(YAML::NodeType::Sequence);
     n.SetStyle(YAML::EmitterStyle::Flow); // [x, y, z]
     n.push_back(v.x);
     n.push_back(v.y);
     n.push_back(v.z);
+    return n;
+}
+
+YAML::Node Vec2Node(const Vec2& v) {
+    YAML::Node n(YAML::NodeType::Sequence);
+    n.SetStyle(YAML::EmitterStyle::Flow);
+    n.push_back(v.x);
+    n.push_back(v.y);
     return n;
 }
 
@@ -27,11 +38,45 @@ Vec3 NodeVec3(const YAML::Node& n, const Vec3& def) {
     }
 }
 
+Vec2 NodeVec2(const YAML::Node& n, const Vec2& def) {
+    if (!n || !n.IsSequence() || n.size() < 2) return def;
+    try {
+        return Vec2(n[0].as<float>(), n[1].as<float>());
+    } catch (...) {
+        return def;
+    }
+}
+
+Vec3 AverageTint(const MeshComponent& m, const Vec3& def) {
+    size_t n = 0;
+    Vec3 acc(0, 0, 0);
+    for (size_t i = 0; i + 5 < m.Vertices.size(); i += 6) {
+        acc.x += m.Vertices[i + 3];
+        acc.y += m.Vertices[i + 4];
+        acc.z += m.Vertices[i + 5];
+        ++n;
+    }
+    if (n == 0) return def;
+    return Vec3(acc.x / n, acc.y / n, acc.z / n);
+}
+
+std::string GuiKindToStr(GuiComponent::Kind k) {
+    if (k == GuiComponent::Kind::Label) return "label";
+    if (k == GuiComponent::Kind::Panel) return "panel";
+    return "button";
+}
+
+GuiComponent::Kind GuiKindFromStr(const std::string& s) {
+    if (s == "label") return GuiComponent::Kind::Label;
+    if (s == "panel") return GuiComponent::Kind::Panel;
+    return GuiComponent::Kind::Button;
+}
+
 } // namespace
 
 bool SceneSerializer::Save(Scene& scene, const std::string& path) {
     YAML::Node root;
-    root["scene"]["format"] = "arc-scene-1";
+    root["scene"]["format"] = kFormat;
     YAML::Node entities(YAML::NodeType::Sequence);
 
     int count = 0;
@@ -46,6 +91,40 @@ bool SceneSerializer::Save(Scene& scene, const std::string& path) {
             tr["scale"] = Vec3Node(t.Scale);
             ent["transform"] = tr;
         }
+        if (e.HasComponent<MeshComponent>()) {
+            const auto& m = e.GetComponent<MeshComponent>();
+            YAML::Node mn;
+            mn["id"] = m.MeshId.empty() ? "triangle" : m.MeshId;
+            mn["tint"] = Vec3Node(AverageTint(m, Vec3(0.9f, 0.9f, 0.9f)));
+            ent["mesh"] = mn;
+        }
+        if (e.HasComponent<CameraComponent>()) {
+            const auto& c = e.GetComponent<CameraComponent>();
+            YAML::Node cn;
+            cn["active"] = c.Active;
+            cn["zoom"] = c.Zoom;
+            ent["camera"] = cn;
+        }
+        if (e.HasComponent<LightComponent>()) {
+            const auto& l = e.GetComponent<LightComponent>();
+            YAML::Node ln;
+            ln["color"] = Vec3Node(l.Color);
+            ln["intensity"] = l.Intensity;
+            ln["radius"] = l.Radius;
+            ent["light"] = ln;
+        }
+        if (e.HasComponent<GuiComponent>()) {
+            const auto& g = e.GetComponent<GuiComponent>();
+            YAML::Node gn;
+            gn["widget"] = GuiKindToStr(g.Widget);
+            gn["size"] = Vec2Node(g.Size);
+            gn["text"] = std::string(g.Text);
+            YAML::Node bg;
+            bg["bg"] = Vec3Node(g.BgColor);
+            bg["text"] = Vec3Node(g.TextColor);
+            gn["colors"] = bg;
+            ent["gui"] = gn;
+        }
         entities.push_back(ent);
         count++;
     }
@@ -56,7 +135,7 @@ bool SceneSerializer::Save(Scene& scene, const std::string& path) {
         Log::Error("SceneSerializer: cannot write " + path);
         return false;
     }
-    f << "# ArcEngine scene (generated)\n";
+    f << "# ArcEngine scene (generated, " << kFormat << ")\n";
     f << root;
     Log::Info("Scene saved: " + path + " (" + std::to_string(count) + " entities)");
     return true;
@@ -77,8 +156,10 @@ bool SceneSerializer::Load(const std::string& path, Scene& outScene) {
         return false;
     }
 
-    if (!root["scene"] || !root["scene"]["format"] ||
-        root["scene"]["format"].as<std::string>("") != "arc-scene-1") {
+    std::string fmt = (root["scene"] && root["scene"]["format"])
+                          ? root["scene"]["format"].as<std::string>("")
+                          : "";
+    if (fmt != kFormat && fmt != "arc-scene-1") {
         Log::Warn("SceneSerializer: missing/unknown format header in " + path +
                   " — attempting load anyway");
     }
@@ -96,6 +177,49 @@ bool SceneSerializer::Load(const std::string& path, Scene& outScene) {
                 t.Position = NodeVec3(tr["position"], t.Position);
                 t.Rotation = NodeVec3(tr["rotation"], t.Rotation);
                 t.Scale = NodeVec3(tr["scale"], t.Scale);
+            }
+            if (ent["mesh"]) {
+                const auto& mn = ent["mesh"];
+                std::string id =
+                    mn["id"] ? mn["id"].as<std::string>("triangle") : "triangle";
+                Vec3 tint = NodeVec3(mn["tint"], Vec3(0.9f, 0.9f, 0.9f));
+                float rgb[3] = {tint.x, tint.y, tint.z};
+                MeshComponent m = MeshComponent::FromId(id, rgb);
+                m.MeshId = id;
+                MeshComponent& d = e.AddComponent<MeshComponent>();
+                d = std::move(m);
+                d.Upload();
+            }
+            if (ent["camera"]) {
+                const auto& cn = ent["camera"];
+                CameraComponent c;
+                c.Active = cn["active"] ? cn["active"].as<bool>(true) : true;
+                c.Zoom = cn["zoom"] ? cn["zoom"].as<float>(1.0f) : 1.0f;
+                e.AddComponent<CameraComponent>() = c;
+            }
+            if (ent["light"]) {
+                const auto& ln = ent["light"];
+                LightComponent l;
+                l.Color = NodeVec3(ln["color"], l.Color);
+                l.Intensity = ln["intensity"] ? ln["intensity"].as<float>(1.0f) : 1.0f;
+                l.Radius = ln["radius"] ? ln["radius"].as<float>(3.0f) : 3.0f;
+                e.AddComponent<LightComponent>() = l;
+            }
+            if (ent["gui"]) {
+                const auto& gn = ent["gui"];
+                GuiComponent g;
+                g.Widget = GuiKindFromStr(gn["widget"]
+                                              ? gn["widget"].as<std::string>("button")
+                                              : "button");
+                g.Size = NodeVec2(gn["size"], g.Size);
+                std::string text =
+                    gn["text"] ? gn["text"].as<std::string>("Button") : "Button";
+                std::snprintf(g.Text, sizeof(g.Text), "%s", text.c_str());
+                if (gn["colors"]) {
+                    g.BgColor = NodeVec3(gn["colors"]["bg"], g.BgColor);
+                    g.TextColor = NodeVec3(gn["colors"]["text"], g.TextColor);
+                }
+                e.AddComponent<GuiComponent>() = g;
             }
             count++;
         }

@@ -92,7 +92,10 @@ int App::Run() {
         }
 
         // 2. Fixed-step physics with accumulator + spiral guard.
-        m_accumulator += static_cast<double>(m_clock.Delta());
+        // Paused with the editor world: no stepping while holding or paused.
+        bool worldRunning =
+            !m_editor.IsInitialized() || !m_editorVisible || m_editor.IsPlaying();
+        if (worldRunning) m_accumulator += static_cast<double>(m_clock.Delta());
         int steps = 0;
         while (m_accumulator >= step && steps < m_cfg.MaxPhysicsSteps) {
             if (m_onPhysics) m_onPhysics(static_cast<float>(step));
@@ -112,18 +115,19 @@ int App::Run() {
         }
 
         // 3. Variable-rate update, 4. render with interpolation alpha.
-        if (m_onUpdate) m_onUpdate(m_clock.Delta());
+        // Editor play mode pauses the game world: updates run only when playing
+        // (or when the editor overlay is hidden/off).
+        bool editorHolding = m_editor.IsInitialized() && m_editorVisible && !m_editor.IsPlaying();
+        if (m_onUpdate && !editorHolding) m_onUpdate(m_clock.Delta());
         const float alpha = static_cast<float>(m_accumulator / step);
         if (m_onRender) m_onRender(alpha);
 
-        // M7: editor toggle + window draw (runs on top of the game viewport).
-        if (m_editorAvailable) {
+        // M7: editor overlay (panels on top of the game view; F1 toggles).
+        if (m_editorAvailable && m_editor.IsInitialized()) {
             if (Input::IsKeyPressed(Key::F1)) m_editorVisible = !m_editorVisible;
             if (m_editorVisible) {
-                m_editor.BeginFrame();
-                m_editor.HierarchyWindow();
-                m_editor.InspectorWindow();
-                m_editor.ViewportWindow();
+                m_editor.BeginFrame(m_clock.Delta());
+                m_editor.DrawAll();
                 m_editor.EndFrame();
             }
         }
@@ -137,8 +141,10 @@ int App::Run() {
                       std::to_string(m_cfg.MaxFrames) + " frames...");
     }
 
-    // Shutdown: user first (later: Script->Physics->Audio), then Input, Window RAII.
+    // Shutdown: user first (later: Script->Physics->Audio), then editor GL
+    // resources while the context is still current, then Input, Window RAII.
     if (m_onShutdown) m_onShutdown();
+    if (m_editorAvailable) m_editor.Shutdown();
     Input::Shutdown();
     Log::Info("App: stopped after " + std::to_string(m_frames) + " frames, " +
               std::to_string(m_physicsSteps) + " physics steps.");

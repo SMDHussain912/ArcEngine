@@ -28,6 +28,7 @@ public:
     std::vector<Entity> Entities();
 
     const std::string& EntityName(uint32_t id) const;
+    void RenameEntity(uint32_t id, const std::string& name);
 
     void Update(float dt); // calls UpdateFn on each entity (M9 Lua hooks here)
     using UpdateFn = std::function<void(Entity, float)>;
@@ -50,6 +51,14 @@ public:
     template <typename T>
     T& GetComponent(uint32_t id) {
         return ComponentPool<T>().at(id);
+    }
+
+    template <typename T>
+    void RemoveComponent(uint32_t id) {
+        auto it = m_pools.find(typeid(T));
+        if (it == m_pools.end()) return;
+        auto& pool = std::any_cast<std::unordered_map<uint32_t, T>&>(it->second);
+        pool.erase(id);
     }
 
     template <typename T>
@@ -129,6 +138,14 @@ T& Entity::GetComponent() {
 template <typename T>
 const T& Entity::GetComponent() const {
     return m_scene->GetComponent<T>(m_id);
+}
+
+template <typename T>
+bool Entity::RemoveComponent() {
+    if (!Valid() || m_scene == nullptr) return false;
+    if (!m_scene->HasComponent<T>(m_id)) return false;
+    m_scene->RemoveComponent<T>(m_id);
+    return true;
 }
 
 } // namespace Arc
