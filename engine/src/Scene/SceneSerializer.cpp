@@ -29,6 +29,16 @@ YAML::Node Vec2Node(const Vec2& v) {
     return n;
 }
 
+YAML::Node Vec4Node(const Vec4& v) {
+    YAML::Node n(YAML::NodeType::Sequence);
+    n.SetStyle(YAML::EmitterStyle::Flow);
+    n.push_back(v.x);
+    n.push_back(v.y);
+    n.push_back(v.z);
+    n.push_back(v.w);
+    return n;
+}
+
 Vec3 NodeVec3(const YAML::Node& n, const Vec3& def) {
     if (!n || !n.IsSequence() || n.size() < 3) return def;
     try {
@@ -42,6 +52,15 @@ Vec2 NodeVec2(const YAML::Node& n, const Vec2& def) {
     if (!n || !n.IsSequence() || n.size() < 2) return def;
     try {
         return Vec2(n[0].as<float>(), n[1].as<float>());
+    } catch (...) {
+        return def;
+    }
+}
+
+Vec4 NodeVec4(const YAML::Node& n, const Vec4& def) {
+    if (!n || !n.IsSequence() || n.size() < 4) return def;
+    try {
+        return Vec4(n[0].as<float>(), n[1].as<float>(), n[2].as<float>(), n[3].as<float>());
     } catch (...) {
         return def;
     }
@@ -104,6 +123,22 @@ bool SceneSerializer::Save(Scene& scene, const std::string& path) {
             cn["active"] = c.Active;
             cn["zoom"] = c.Zoom;
             ent["camera"] = cn;
+        }
+        if (e.HasComponent<SpriteComponent>()) {
+            const auto& sp = e.GetComponent<SpriteComponent>();
+            YAML::Node sn;
+            sn["path"] = sp.TexturePath;
+            sn["tint"] = Vec4Node(sp.Tint);
+            sn["size"] = Vec2Node(sp.Size);
+            sn["layer"] = sp.Layer;
+            sn["flip_x"] = sp.FlipX;
+            sn["flip_y"] = sp.FlipY;
+            sn["filter_linear"] = sp.FilterLinear;
+            YAML::Node rn;
+            rn["min"] = Vec2Node(sp.RegionMin);
+            rn["max"] = Vec2Node(sp.RegionMax);
+            sn["region"] = rn;
+            ent["sprite"] = sn;
         }
         if (e.HasComponent<LightComponent>()) {
             const auto& l = e.GetComponent<LightComponent>();
@@ -196,6 +231,23 @@ bool SceneSerializer::Load(const std::string& path, Scene& outScene) {
                 c.Active = cn["active"] ? cn["active"].as<bool>(true) : true;
                 c.Zoom = cn["zoom"] ? cn["zoom"].as<float>(1.0f) : 1.0f;
                 e.AddComponent<CameraComponent>() = c;
+            }
+            if (ent["sprite"]) {
+                const auto& sn = ent["sprite"];
+                SpriteComponent sp;
+                sp.TexturePath = sn["path"] ? sn["path"].as<std::string>("") : "";
+                sp.Tint = NodeVec4(sn["tint"], sp.Tint);
+                sp.Size = NodeVec2(sn["size"], sp.Size);
+                sp.Layer = sn["layer"] ? sn["layer"].as<int>(0) : 0;
+                sp.FlipX = sn["flip_x"] ? sn["flip_x"].as<bool>(false) : false;
+                sp.FlipY = sn["flip_y"] ? sn["flip_y"].as<bool>(false) : false;
+                sp.FilterLinear =
+                    sn["filter_linear"] ? sn["filter_linear"].as<bool>(true) : true;
+                if (sn["region"]) {
+                    sp.RegionMin = NodeVec2(sn["region"]["min"], sp.RegionMin);
+                    sp.RegionMax = NodeVec2(sn["region"]["max"], sp.RegionMax);
+                }
+                e.AddComponent<SpriteComponent>() = sp;
             }
             if (ent["light"]) {
                 const auto& ln = ent["light"];

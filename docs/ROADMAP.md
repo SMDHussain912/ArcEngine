@@ -43,8 +43,17 @@ Stack: `C++17 + OpenGL 4.6 -> GLES 3.2 + Lua 5.4 + sol2 + GLFW (Linux) -> SDL/EG
 - `Audio` (miniaudio v0.11.25 vendored, Play/SetMasterVolume, silent-continue if no device), `assets/audio/blip.wav` by `tools/make_test_wav.py`
 - `examples/06-texture`: textured quad + blip on Space/click, WASD moves
 
-## M7 Editor
-- ImGui: Hierarchy, Inspector, Viewport
+## M7 Editor [DONE — pass 2]
+- ImGui 1.92.9 vendored (master, no docking): Hierarchy, Inspector, Viewport (off-screen FBO), Console, status bar — fixed panel layout (menu 24 / toolbar 36 / hierarchy 250 / inspector 300 / console 170)
+- Play/Pause/Stop with scene backup+restore, undo/redo (transform entries), Ctrl+S/O/Z/Y shortcuts, F5/F6 play controls
+- Components in editor: Transform (deg rotation), Mesh (7 primitives + tint), Camera, Light, GUI, Sprite — add/remove/duplicate, .arc-scene-2 save/load
+- Viewport: ortho pan/zoom camera, click-select picking, translate/rotate/scale gizmo, grid, entity icons ([#] mesh, [s] sprite)
+- Entity menu: empty/mesh/camera/light/GUI/sprite creation + Load Starter Scene
+
+## P1 2D [in progress]
+- Step 1 Sprite2D batcher: `SpriteComponent` (texture path, tint, UV region, flip, filter, layer, size) + `SpriteBatch` — stable sort by (Layer, TexturePath), one indexed draw per texture bind, streaming VBO, alpha blend, texture cache + `ReleaseGL()`
+- `examples/07-sprites`: 4 sprites / 1 bind verified on Intel HD 620; inspector edits sprite fields live
+- Editor viewport renders sprites via the batcher; .arc sprite round-trip covered by `tests/test_sprites`
 
 ## M8 Android
 - NDK + EGL + GLES, touch input, APK

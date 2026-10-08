@@ -61,6 +61,7 @@ bool ArcEditor::Init(Window& window, Renderer* renderer, Scene& scene) {
 void ArcEditor::Shutdown() {
     if (!m_initialized) return;
     DestroyGL();
+    m_sprites.ReleaseGL(); // while the GL context is still current
     if (ImGui::GetCurrentContext() != nullptr) {
         ImGui_ImplOpenGL3_Shutdown();
         ImGui_ImplGlfw_Shutdown();
@@ -225,6 +226,8 @@ bool ArcEditor::LoadScene(const std::string& path) {
             n.AddComponent<LightComponent>() = e.GetComponent<LightComponent>();
         if (e.HasComponent<GuiComponent>())
             n.AddComponent<GuiComponent>() = e.GetComponent<GuiComponent>();
+        if (e.HasComponent<SpriteComponent>())
+            n.AddComponent<SpriteComponent>() = e.GetComponent<SpriteComponent>();
     }
     m_scene->SetFocusEntity(Entity());
     m_undo.clear();
@@ -330,6 +333,8 @@ Entity ArcEditor::DuplicateEntity(Entity src) {
         dst.AddComponent<LightComponent>() = src.GetComponent<LightComponent>();
     if (src.HasComponent<GuiComponent>())
         dst.AddComponent<GuiComponent>() = src.GetComponent<GuiComponent>();
+    if (src.HasComponent<SpriteComponent>())
+        dst.AddComponent<SpriteComponent>() = src.GetComponent<SpriteComponent>();
     m_scene->SetFocusEntity(dst);
     m_dirty = true;
     AddLog("Duplicated '" + src.Name() + "' as '" + dst.Name() + "'");
@@ -502,6 +507,9 @@ void ArcEditor::RenderSceneToFBO(int w, int h) {
         glDrawArrays(GL_LINES, 0, m_gridVerts);
         glBindVertexArray(0);
     }
+
+    // P1: sprite entities batch here — one indexed draw per texture bind.
+    m_sprites.Draw(*m_scene, vp);
 
     Entity focus = m_scene->GetFocusEntity();
     m_sceneShader->Bind();
@@ -845,6 +853,14 @@ void ArcEditor::DrawMenuBar() {
             m_dirty = true;
             AddLog("Created camera entity.");
         }
+        if (ImGui::MenuItem("Create Sprite")) {
+            Entity e = m_scene->CreateEntity("Sprite");
+            SpriteComponent& sp = e.AddComponent<SpriteComponent>();
+            sp.TexturePath = "assets/textures/test.png";
+            m_scene->SetFocusEntity(e);
+            m_dirty = true;
+            AddLog("Created sprite entity.");
+        }
         if (ImGui::MenuItem("Create Light")) {
             Entity e = m_scene->CreateEntity("Light");
             e.AddComponent<LightComponent>();
@@ -1048,7 +1064,9 @@ void ArcEditor::HierarchyWindow() {
         ++shown;
         ImGui::PushID(static_cast<int>(e.Id()));
         bool sel = focus.Valid() && focus.Id() == e.Id();
-        const char* icon = e.HasComponent<MeshComponent>() ? "[#] " : "[ ] ";
+        const char* icon = e.HasComponent<MeshComponent>()
+                               ? "[#] "
+                               : (e.HasComponent<SpriteComponent>() ? "[s] " : "[ ] ");
         std::string label = std::string(icon) + e.Name();
         if (ImGui::Selectable(label.c_str(), sel)) m_scene->SetFocusEntity(e);
         if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
@@ -1269,6 +1287,65 @@ void ArcEditor::InspectorWindow() {
             sel.GetComponent<MeshComponent>().Upload();
             m_dirty = true;
             AddLog("Added quad to '" + sel.Name() + "'");
+        }
+    }
+    if (sel.HasComponent<SpriteComponent>()) {
+        if (ImGui::TreeNodeEx("Sprite", ImGuiTreeNodeFlags_DefaultOpen)) {
+            auto& sp = sel.GetComponent<SpriteComponent>();
+            char pathBuf[256];
+            std::snprintf(pathBuf, sizeof(pathBuf), "%s", sp.TexturePath.c_str());
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::InputTextWithHint("Texture##tex", "assets/textures/...", pathBuf,
+                                         sizeof(pathBuf))) {
+                sp.TexturePath = pathBuf;
+                m_dirty = true;
+            }
+            float tint[4] = {sp.Tint.x, sp.Tint.y, sp.Tint.z, sp.Tint.w};
+            if (ImGui::ColorEdit4("Tint", tint)) {
+                sp.Tint = Vec4(tint[0], tint[1], tint[2], tint[3]);
+                m_dirty = true;
+            }
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::DragFloat2("Size", &sp.Size.x, 0.01f, 0.01f, 100.0f, "%.2f"))
+                m_dirty = true;
+            int layer = sp.Layer;
+            ImGui::SetNextItemWidth(80);
+            if (ImGui::DragInt("Layer", &layer, 1.0f, -100, 100)) {
+                sp.Layer = layer;
+                m_dirty = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Checkbox("FlipX", &sp.FlipX)) m_dirty = true;
+            ImGui::SameLine();
+            if (ImGui::Checkbox("FlipY", &sp.FlipY)) m_dirty = true;
+            if (ImGui::TreeNode("UV Region")) {
+                ImGui::SetNextItemWidth(-1);
+                if (ImGui::DragFloat2("Min", &sp.RegionMin.x, 0.01f, 0.0f, 1.0f, "%.3f"))
+                    m_dirty = true;
+                ImGui::SetNextItemWidth(-1);
+                if (ImGui::DragFloat2("Max", &sp.RegionMax.x, 0.01f, 0.0f, 1.0f, "%.3f"))
+                    m_dirty = true;
+                if (ImGui::Button("Reset Region")) {
+                    sp.RegionMin = Vec2(0.0f, 0.0f);
+                    sp.RegionMax = Vec2(1.0f, 1.0f);
+                    m_dirty = true;
+                }
+                ImGui::TreePop();
+            }
+            if (ImGui::Checkbox("Linear filter", &sp.FilterLinear)) m_dirty = true;
+            if (ImGui::Button("Remove Sprite")) {
+                sel.RemoveComponent<SpriteComponent>();
+                m_dirty = true;
+                AddLog("Removed sprite from '" + sel.Name() + "'");
+            }
+            ImGui::TreePop();
+        }
+    } else {
+        if (ImGui::Button("Add Sprite")) {
+            SpriteComponent& sp = sel.AddComponent<SpriteComponent>();
+            sp.TexturePath = "assets/textures/test.png";
+            m_dirty = true;
+            AddLog("Added sprite to '" + sel.Name() + "'");
         }
     }
     if (sel.HasComponent<CameraComponent>()) {

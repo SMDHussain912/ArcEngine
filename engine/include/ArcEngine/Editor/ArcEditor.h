@@ -10,6 +10,7 @@
 #include "ArcEngine/Core/Window.h"
 #include "ArcEngine/Renderer/Renderer.h"
 #include "ArcEngine/Renderer/Shader.h"
+#include "ArcEngine/Renderer/SpriteBatch.h"
 #include "ArcEngine/Scene/Components.h"
 #include "ArcEngine/Scene/Scene.h"
 
@@ -103,6 +104,7 @@ private:
     int m_fboH = 0;
     std::unique_ptr<Shader> m_sceneShader;
     std::unique_ptr<Shader> m_flatShader;
+    SpriteBatch m_sprites; // P1: sprite entities render in the viewport FBO
     uint32_t m_gridVao = 0;
     uint32_t m_gridVbo = 0;
     int m_gridVerts = 0;

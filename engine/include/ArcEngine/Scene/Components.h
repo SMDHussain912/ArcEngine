@@ -1,6 +1,9 @@
 #pragma once
 #include "ArcEngine/Core/Math.h"
 
+#include <cstdint>
+#include <string>
+
 namespace Arc {
 
 // Position + rotation (euler radians) + scale (M5).
@@ -36,6 +39,22 @@ struct LightComponent {
     Vec3 Color{1.0f, 0.95f, 0.85f};
     float Intensity = 1.0f;
     float Radius = 3.0f;
+};
+
+// Sprite2D (Godot-style, P1): texture-backed quad with tint, flip, UV region
+// (atlas/sub-sprite), pixel filter, and draw layer. The SpriteBatch renders
+// all sprites in one indexed draw per distinct texture — 06-texture drew one
+// VAO per sprite; that path stays for single quads.
+struct SpriteComponent {
+    std::string TexturePath;        // asset path, e.g. "assets/textures/test.png"
+    Vec4 Tint{1.0f, 1.0f, 1.0f, 1.0f};
+    Vec2 RegionMin{0.0f, 0.0f};     // UV rect inside the texture
+    Vec2 RegionMax{1.0f, 1.0f};
+    bool FlipX = false;
+    bool FlipY = false;
+    bool FilterLinear = true;
+    int32_t Layer = 0;              // low draws first (Godot CanvasLayer-lite)
+    Vec2 Size{1.0f, 1.0f};          // world-unit quad size before Transform scale
 };
 
 // GUI widget (Godot Control / Unreal WidgetComponent-lite): drawn as an

@@ -14,6 +14,7 @@ add_library(ArcEngine STATIC
   src/Renderer/OpenGLRenderer.cpp
   src/Renderer/RenderCommand.cpp
   src/Renderer/Texture.cpp
+  src/Renderer/SpriteBatch.cpp
   src/Audio/Audio.cpp
   src/Scene/Scene.cpp
   src/Scene/SceneSerializer.cpp
