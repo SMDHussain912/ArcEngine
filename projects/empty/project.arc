@@ -4,7 +4,7 @@
 [project]
 name = ArcEngine Empty Project
 version = 0.1.0
-main_scene =
+main_scene = main.arc
 
 [window]
 title = ArcEngine — Empty Project

@@ -3,6 +3,7 @@
 #include "ArcEngine/Core/Log.h"
 #include "ArcEngine/Core/Project.h"
 #include "ArcEngine/Renderer/GraphicsContext.h"
+#include "ArcEngine/Scene/SceneSerializer.h"
 
 #include <glad/gl.h>
 #define GLFW_INCLUDE_NONE
@@ -39,6 +40,16 @@ int App::Run() {
         m_assets.AddSearchPath(
             std::filesystem::path(m_project->FilePath).parent_path().string());
     m_assets.AddSearchPath(".");
+
+    // Main scene (resolved through AssetManager search paths).
+    if (m_project && !m_project->MainScene.empty()) {
+        std::string scenePath = m_assets.Resolve(m_project->MainScene);
+        if (scenePath.empty()) scenePath = m_project->MainScene; // clear error below
+        if (SceneSerializer::Load(scenePath, m_scene))
+            Log::Info("App: main scene entities = " + std::to_string(m_scene.EntityCount()));
+        else
+            Log::Warn("App: main scene failed to load: " + m_project->MainScene);
+    }
 
     if (!GraphicsContext::Init()) return 1;
     Input::Init(m_window->NativeHandle());
@@ -110,6 +121,7 @@ int App::Run() {
     Log::Info("App: stopped after " + std::to_string(m_frames) + " frames, " +
               std::to_string(m_physicsSteps) + " physics steps.");
     m_window.reset();
+    m_scene.Clear();
     return 0;
 }
 

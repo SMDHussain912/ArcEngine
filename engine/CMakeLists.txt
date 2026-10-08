@@ -16,6 +16,7 @@ add_library(ArcEngine STATIC
   src/Renderer/Texture.cpp
   src/Audio/Audio.cpp
   src/Scene/Scene.cpp
+  src/Scene/SceneSerializer.cpp
   src/Scene/MeshComponent.cpp
 )
 
@@ -32,6 +33,9 @@ find_package(OpenGL REQUIRED)
 # glm 1.0.3 system package (M3a). Vendored copy comes before Android (M8).
 find_package(glm REQUIRED)
 
+# yaml-cpp (P0 Step 4): .arc scene serialization. System now; vendor pre-Android.
+find_package(yaml-cpp REQUIRED)
+
 # Vendored glad2 loader (M2): Desktop GL 4.6 Core.
 add_subdirectory(${CMAKE_SOURCE_DIR}/third_party/glad ${CMAKE_BINARY_DIR}/third_party/glad)
 
@@ -43,7 +47,7 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/third_party/miniaudio ${CMAKE_BINARY_DIR}/t
 
 target_include_directories(ArcEngine PUBLIC ${GLFW_INCLUDE_DIRS})
 target_link_directories(ArcEngine PUBLIC ${GLFW_LIBRARY_DIRS})
-target_link_libraries(ArcEngine PUBLIC ${GLFW_LIBRARIES} OpenGL::GL glad stb miniaudio glm::glm pthread m dl)
+target_link_libraries(ArcEngine PUBLIC ${GLFW_LIBRARIES} OpenGL::GL glad stb miniaudio glm::glm yaml-cpp pthread m dl)
 target_compile_options(ArcEngine PUBLIC ${GLFW_CFLAGS_OTHER})
 
 set_target_properties(ArcEngine PROPERTIES
