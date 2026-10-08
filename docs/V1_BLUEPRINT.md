@@ -30,6 +30,14 @@ Goal: turn prototype into production base. No new gameplay yet.
       (batched quads, texture atlas, `TextureRegion`), canvas sort (z + layer)
 - [ ] `Physics/PhysicsServer2D` over Box2D v3: `RigidBody2D`, `StaticBody2D`,
       `CharacterBody2D`, `Area2D`, collision layers/masks, raycast
+- [ ] `Scripting` Lua 2D API: `transform2d`, `Input.axis/action`, `Audio.play`,
+      `Physics.raycast2d`; `ready/process/physics_process`
+- [ ] `examples/07-sprite2d`: player sprite + platforms + coin pickup + blip
+- [ ] `projects/demo_2d/`: tiny platformer level in `.arc`
+
+**Accept:** 60fps 2D collisions + Lua movement on Intel HD 620.
+**Tag:** `v1.0-p1`
+
 ## Phase P2 — Shippable 3D
 
 - [ ] `Rendering/Camera3D` (perspective + orbit helper), `Rendering/Material`
@@ -52,6 +60,8 @@ Goal: turn prototype into production base. No new gameplay yet.
 - [ ] `tools/arc_import`: CLI reimport changed assets (hash check)
 
 **Accept:** build + play `demo_2d` without editing C++.
+**Tag:** `v1.0-p3`
+
 ## Phase P4 — Mobile (Android)
 
 - [ ] `Rendering/OpenGLESRenderer` parity: `#version 320 es` shader variants,
@@ -89,12 +99,13 @@ particles v2, consoles, visual scripting v1 — all tracked as `V1.1+` issues.
 | Inline demo shaders | `Material` + shader variants (GL + GLES) |
 | `examples/0X-*` | Kept as regression; new `07/08/...` per phase |
 
-**Tag:** `v1.0-p3`
+## Reference study (Godot + Unreal)
 
-- [ ] `Scripting` Lua 2D API: `transform2d`, `Input.axis/action`, `Audio.play`,
-      `Physics.raycast2d`; `ready/process/physics_process`
-- [ ] `examples/07-sprite2d`: player sprite + platforms + coin pickup + blip
-- [ ] `projects/demo_2d/`: tiny platformer level in `.arc`
-
-**Accept:** 60fps 2D collisions + Lua movement on Intel HD 620.
-**Tag:** `v1.0-p1`
+Real source study lives in [`REFERENCE_STUDY.md`](REFERENCE_STUDY.md)
+(local copies: `/home/arc/Documents/EngineReference/godot-src` + `unreal-src`).
+Applied deltas: Godot-style audio player properties (`attenuation`,
+`unit_size`, `max_db`, `doppler`), `Main::iteration`-ordered fixed-step loop,
+GLES backend split (canvas batcher + forward scene), physics-as-modules
+(Box2D/Jolt). Avoided: per-OS audio drivers, SCons/no-STL, Unreal
+macro/codegen weight. Note: Godot uses **no OpenAL** (ALSA/Pulse/WASAPI mixers) —
+we keep OpenAL-Soft because one backend covers Linux + Android.
