@@ -9,6 +9,8 @@
 
 namespace Arc {
 
+struct Project;
+
 struct AppConfig {
     std::string Title = "ArcEngine";
     uint32_t Width = 1280;
@@ -50,6 +52,11 @@ public:
     void OnRender(RenderFn fn) { m_onRender = std::move(fn); }
     void OnShutdown(ShutdownFn fn) { m_onShutdown = std::move(fn); }
 
+    // Optional project context (P0 Step 2). Register before Run().
+    // Future steps use it for asset root + main scene; Run() logs it now.
+    void SetProject(std::shared_ptr<Project> p) { m_project = std::move(p); }
+    Project* GetProject() { return m_project.get(); }
+
     // Blocks until quit. Returns process exit code.
     int Run();
     void RequestQuit();
@@ -66,6 +73,7 @@ public:
 private:
     AppConfig m_cfg;
     std::unique_ptr<Window> m_window;
+    std::shared_ptr<Project> m_project;
     Time m_clock;
     double m_accumulator = 0.0;
     uint64_t m_frames = 0;

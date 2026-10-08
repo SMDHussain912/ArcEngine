@@ -12,7 +12,9 @@ Goal: turn prototype into production base. No new gameplay yet.
 
 - [x] `Core/App`: fixed-step loop (60Hz accumulator, spiral guard, `--frames` CI cap),
       ordered frame (poll → physics → update → render → swap), shutdown hooks
-- [ ] `Project` + `project.arc` load: App gets project context, boot empty project
+- [x] `Project` + `project.arc` load/save: tiny `key=value` parser (no YAML lib yet),
+      `ToAppConfig()`, sample `projects/empty/`, `App::SetProject`, boot verified
+- [x] `tests/test_project`: headless load→save→reload round-trip (`ARC_BUILD_TESTS` option)
 - [ ] `Assets/AssetManager`: UUID registry, `assets/*.arc.import` cache,
       sync loaders (async in P3), `File::SearchPaths`
 - [ ] `.arc` scene format (YAML): `Scene > Entities > Components` + load/save round-trip
