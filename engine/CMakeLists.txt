@@ -7,6 +7,7 @@ add_library(ArcEngine STATIC
   src/Core/File.cpp
   src/Core/App.cpp
   src/Core/Project.cpp
+  src/Assets/AssetManager.cpp
   src/Renderer/GraphicsContext.cpp
   src/Renderer/Shader.cpp
   src/Renderer/Buffer.cpp
