@@ -17,6 +17,7 @@ void Scene::DestroyEntity(Entity e) {
     if (!e.Valid()) return;
     m_alive[e.Id()] = false;
     m_names.erase(e.Id());
+    if (m_focus.Id() == e.Id()) m_focus = Entity();
     // Component entries linger keyed by (scene-local) id; ids are never
     // reused within an instance, so Each()/serialization skip them via m_alive.
 }
@@ -26,6 +27,7 @@ void Scene::Clear() {
     m_alive.clear();
     m_pools.clear();
     m_nextId = 1;
+    m_focus = Entity();
 }
 
 std::vector<Entity> Scene::Entities() {
@@ -43,6 +45,12 @@ const std::string& Scene::EntityName(uint32_t id) const {
     static const std::string kEmpty;
     auto it = m_names.find(id);
     return it != m_names.end() ? it->second : kEmpty;
+}
+
+void Scene::RenameEntity(uint32_t id, const std::string& name) {
+    auto it = m_names.find(id);
+    if (it == m_names.end()) return;
+    it->second = name.empty() ? "Entity" : name;
 }
 
 void Scene::Update(float dt) {

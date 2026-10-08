@@ -77,13 +77,3 @@ target_sources(ArcEngine PRIVATE
   src/Editor/ArcEditor.cpp
 )
 
-# ImGui source + backend files (vendored copy, M7), kept as plain sources.
-target_sources(ArcEngine PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/imgui/imgui-1.92.9/imgui.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/imgui/imgui-1.92.9/imgui_widgets.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/imgui/imgui-1.92.9/imgui_draw.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/imgui/imgui-1.92.9/imgui_tables.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/imgui/imgui-1.92.9/backends/imgui_impl_glfw.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/imgui/imgui-1.92.9/backends/imgui_impl_opengl3.cpp
-)
-

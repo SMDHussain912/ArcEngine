@@ -22,5 +22,32 @@ struct TransformComponent {
     }
 };
 
+// 2D scene camera (Godot Camera2D / Unreal CameraActor-lite): which entity
+// the game view follows, plus zoom. Editor viewport pans/zooms independently;
+// at runtime the game reads the first entity carrying this component.
+struct CameraComponent {
+    bool Active = true;
+    float Zoom = 1.0f; // world units visible vertically = 2 / Zoom
+};
+
+// 2D light (Godot PointLight2D / Unreal PointLight-lite): editor draws the
+// radius ring; renderer hookup for real shading arrives with materials.
+struct LightComponent {
+    Vec3 Color{1.0f, 0.95f, 0.85f};
+    float Intensity = 1.0f;
+    float Radius = 3.0f;
+};
+
+// GUI widget (Godot Control / Unreal WidgetComponent-lite): drawn as an
+// overlay quad in the editor viewport; runtime input comes with UI focus work.
+struct GuiComponent {
+    enum class Kind { Button = 0, Label = 1, Panel = 2 };
+    Kind Widget = Kind::Button;
+    Vec2 Size{1.2f, 0.4f};
+    Vec3 BgColor{0.16f, 0.22f, 0.34f};
+    Vec3 TextColor{0.92f, 0.94f, 0.98f};
+    char Text[64] = {"Button"};
+};
+
 } // namespace Arc
 
