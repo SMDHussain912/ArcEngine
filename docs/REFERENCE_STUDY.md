@@ -39,21 +39,28 @@ reimplemented clean-room in ArcEngine style (C++17, OpenGL, Lua).
 - **SCons + no-STL policy.** We keep CMake + STL (faster onboarding, NDK-ready).
 - **2M-line scope.** We defer networking/navmesh/retargeting to V1.1+.
 
-## 3. Unreal: COPY these ideas (from docs + zip layout)
+## 3. Unreal 5.8 (extracted, `unreal-src/`) — COPY these ideas
 
-- **Plugins/ + platform split.** `Engine/Plugins|Platforms|Programs` layout —
-  our `third_party/` + `platform/android/` mirrors it at small scale.
-- **UProject-style project file.** Our `project.arc` + `projects/demo_2d`
-  mirrors `Default.uprojectdirs` thinking: project describes maps + assets.
-- **Forward renderer for mobile.** Unreal's mobile forward path validates our
-  forward-only V1 (no deferred) for GLES.
+- **Modules as folders, not one blob.** 601 `*.Build.cs` modules under
+  `Engine/Source/{Runtime,Editor,Developer,Programs}` (e.g. `AudioMixer`,
+  `AssetRegistry`, `ApplicationCore`, `AIModule`). Lesson: **feature = module
+  with its own build unit.** Our `engine/` grows a `modules/` split when
+  editor ships (e.g. `arc_audio`, `arc_physics_2d`, `arc_editor`).
+- **One world tick, many systems.** `Runtime/Launch/Private/LaunchEngineLoop.cpp`:
+  `FEngineLoop::Tick()` (7k-line file) → `TickRenderingTickables` →
+  `GEngine->Tick(delta)` → deferred commands. Systems tick inside ONE
+  engine tick — no scattered loops. Our `App::Frame()` mirrors: one tick,
+  subsystems (`Physics → Script → Audio → Render`) called in order inside it.
+- **Project descriptor.** `Default.uprojectdirs` + `Engine/Plugins` — validate
+  our `project.arc` + `projects/<name>/` and keep plugins out of core.
 
-## 4. Unreal: AVOID these mistakes
+## 4. Unreal: AVOID these mistakes (confirmed in source)
 
 - **C++ + Blueprints + macros (UCLASS/USTRUCT) complexity.** We do
   C++ servers + plain Lua (sol2, no codegen) — readable in one sitting.
-- **256k-file, ~3GB tree.** ArcEngine stays vendored-minimal; every
-  `third_party/*` must justify size (glad ~22k lines OK, Jolt justified, rest tiny).
+- **601-module, 3.4GB tree + 7k-line `LaunchEngineLoop.cpp`.** ArcEngine
+  stays vendored-minimal; every `third_party/*` must justify size
+  (glad ~22k lines OK, Jolt justified, rest tiny). One readable `App::Frame`.
 - **Closed habits.** MIT + `docs/*.md` professional from day one (this file).
 
 ## 5. Resulting V1 deltas (applied to blueprint)
@@ -65,3 +72,5 @@ reimplemented clean-room in ArcEngine style (C++17, OpenGL, Lua).
    process → render), `NOTIFICATION_*` → Lua lifecycle.
 3. GLES backend split = canvas (2D batch) + scene (3D forward), like `drivers/gles3`.
 4. Physics = modules pattern (`Box2D 2D`, `Jolt 3D`), swappable behind server.
+5. `App::Frame()` = single ordered tick (Unreal `FEngineLoop::Tick` lesson) —
+   subsystems never spin their own loops.
