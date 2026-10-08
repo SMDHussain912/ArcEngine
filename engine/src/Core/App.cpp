@@ -1,6 +1,7 @@
 #include "ArcEngine/Core/App.h"
 #include "ArcEngine/Core/Input.h"
 #include "ArcEngine/Core/Log.h"
+#include "ArcEngine/Core/Project.h"
 #include "ArcEngine/Renderer/GraphicsContext.h"
 
 #include <glad/gl.h>
@@ -42,6 +43,9 @@ int App::Run() {
               std::to_string(m_cfg.Width) + "x" + std::to_string(m_cfg.Height));
     if (m_cfg.MaxFrames > 0)
         Log::Info("App: frame cap = " + std::to_string(m_cfg.MaxFrames));
+    if (m_project)
+        Log::Info("App: project '" + m_project->Name + "' v" + m_project->Version +
+                  (m_project->MainScene.empty() ? "" : ", main scene: " + m_project->MainScene));
 
     while (!m_quit && !m_window->ShouldClose()) {
         if (m_cfg.MaxFrames > 0 && m_frames >= m_cfg.MaxFrames) {

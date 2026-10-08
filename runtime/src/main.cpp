@@ -1,32 +1,49 @@
 // ArcRuntime (P0): runs the production App loop.
-// Same feel as the M1 demo (pulse + FPS title + ESC) but the loop is App's
-// fixed-step engine loop now: physics steps are COUNTED and shown in title.
-// Usage: ArcRuntime [--frames N]   (N caps frames — used by CI verification)
+// Usage: ArcRuntime [path/to/project.arc] [--frames N]
+//   project.arc fills window/physics defaults (P0 Step 2);
+//   --frames N caps frames for CI verification.
 #include "ArcEngine/Core/App.h"
 #include "ArcEngine/Core/Log.h"
+#include "ArcEngine/Core/Project.h"
 #include "ArcEngine/Core/Version.h"
 
 #include <glad/gl.h>
 #include <cstdlib>
+#include <memory>
 #include <string>
 
 int main(int argc, char** argv) {
     Arc::Log::Init();
     Arc::Log::Info(std::string("ArcEngine v") + Arc::GetVersion());
 
-    Arc::AppConfig cfg;
+    std::string projectPath;
+    Arc::AppConfig cfg;   // defaults when no project given
     cfg.Title = "ArcEngine — P0 App loop";
-    cfg.Width = 1280;
-    cfg.Height = 720;
-    cfg.PhysicsHz = 60.0f;
-    cfg.QuitOnEscape = true;
+    uint64_t frameCap = 0;
 
     for (int i = 1; i < argc; i++) {
-        if (std::string(argv[i]) == "--frames" && i + 1 < argc)
-            cfg.MaxFrames = static_cast<uint64_t>(std::strtoull(argv[i + 1], nullptr, 10));
+        const std::string a = argv[i];
+        if (a == "--frames" && i + 1 < argc) {
+            frameCap = std::strtoull(argv[i + 1], nullptr, 10);
+            i++;
+        } else if (!a.empty() && a[0] != '-') {
+            projectPath = a;
+        } else {
+            Arc::Log::Warn("Unknown arg: " + a);
+        }
     }
 
+    std::shared_ptr<Arc::Project> project;
+    if (!projectPath.empty()) {
+        auto loaded = Arc::Project::Load(projectPath);
+        if (!loaded) return 1;
+        project = std::make_shared<Arc::Project>(std::move(*loaded));
+        cfg = project->ToAppConfig();
+    }
+    cfg.MaxFrames = frameCap;
+
     Arc::App app(cfg);
+    if (project) app.SetProject(project);
     double titleTimer = 0.0;
 
     // P0 Step 1: physics hook is a counted no-op — Scene lands with the .arc step.
@@ -38,7 +55,7 @@ int main(int argc, char** argv) {
             titleTimer = 0.0;
             int fps = static_cast<int>(app.Fps() + 0.5f);
             app.GetWindow()->SetTitle(
-                "ArcEngine — P0 | " + std::to_string(fps) + " FPS | " +
+                app.Config().Title + " | " + std::to_string(fps) + " FPS | " +
                 std::to_string(app.PhysicsSteps()) + " phys steps");
         }
     });
