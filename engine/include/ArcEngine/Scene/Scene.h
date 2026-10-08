@@ -1,6 +1,7 @@
 #pragma once
 #include "ArcEngine/Scene/Entity.h"
 
+#include <any>
 #include <functional>
 #include <memory>
 #include <string>
@@ -10,9 +11,10 @@
 
 namespace Arc {
 
-// Minimal scene registry (M5) — owns entities + per-type component pools.
-// No entt dependency: simple unordered_map<Type, unordered_map<EntityId, Component>>.
-// Enough for hundreds of entities; M7 editor iterates the same pools.
+// Scene registry — owns entities + per-type component pools (Unity-style).
+// Pools are INSTANCE-OWNED (std::any-typed maps keyed by typeid): two Scene
+// objects never share component storage — required for load-while-old-scene
+// round-trips. (M5 had process-wide static pools; fixed in P0 Step 4.)
 class Scene {
 public:
     Scene() = default;
@@ -55,6 +57,10 @@ public:
         return ComponentPool<T>().at(id);
     }
 
+    // Selection + iteration order for the editor (M7).
+    Entity GetFocusEntity() const { return m_focus; }
+    void SetFocusEntity(Entity e) { m_focus = e; }
+
     // Iterate all entities having T (used by renderer + editor).
     template <typename T, typename Fn>
     void Each(Fn&& fn) {
@@ -65,20 +71,32 @@ public:
     }
 
 private:
+    // Per-instance, per-type pool: map<entityId, Component> erased behind std::any.
     template <typename T>
-    static std::unordered_map<uint32_t, T>& ComponentPool() {
-        static std::unordered_map<uint32_t, T> s_pool;
-        return s_pool;
+    std::unordered_map<uint32_t, T>& ComponentPool() {
+        auto it = m_pools.find(typeid(T));
+        if (it == m_pools.end())
+            it = m_pools.emplace(typeid(T), std::unordered_map<uint32_t, T>{}).first;
+        return std::any_cast<std::unordered_map<uint32_t, T>&>(it->second);
     }
-    // NOTE: static pools are per-type process-wide (simple for M5).
-    // M6+ moves pools into Scene instance for multi-scene support.
+
+    template <typename T>
+    const std::unordered_map<uint32_t, T>& ComponentPool() const {
+        static const std::unordered_map<uint32_t, T> s_empty;
+        auto it = m_pools.find(typeid(T));
+        if (it == m_pools.end()) return s_empty;
+        return std::any_cast<const std::unordered_map<uint32_t, T>&>(it->second);
+    }
 
     friend class Entity;
+    friend class SceneSerializer;
 
     std::unordered_map<uint32_t, std::string> m_names;
     std::unordered_map<uint32_t, bool> m_alive;
+    std::unordered_map<std::type_index, std::any> m_pools;
     uint32_t m_nextId = 1;
     UpdateFn m_updateFn;
+    Entity m_focus; // editor selection (M7)
 };
 
 inline Entity::Entity(Scene* scene, uint32_t id) : m_scene(scene), m_id(id) {}

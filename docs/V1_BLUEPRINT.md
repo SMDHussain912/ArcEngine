@@ -10,12 +10,20 @@ OpenAL now (replace miniaudio) · Box2D v3 (2D) + Jolt (3D) · OpenGL 4.6 → GL
 
 Goal: turn prototype into production base. No new gameplay yet.
 
-- [ ] `Core/App`: fixed-step loop (physics 60Hz accumulator, process, render),
-      `project.arc` load, graceful shutdown order (Script→Physics→Audio→Render)
-- [ ] `Assets/AssetManager`: UUID registry, `assets/*.arc.import` cache,
-      sync loaders (async in P3), `File::SearchPaths`
-- [ ] `.arc` scene format (YAML): `Scene > Entities > Components` + load/save round-trip
-- [ ] `Audio/AudioServer` over **OpenAL**: device/context, Listener/Source/Buffer,
+- [x] `Core/App`: fixed-step loop (60Hz accumulator, spiral guard, `--frames` CI cap),
+      ordered frame (poll → physics → update → render → swap), shutdown hooks
+- [x] `Project` + `project.arc` load/save: tiny `key=value` parser (no YAML lib yet),
+      `ToAppConfig()`, sample `projects/empty/`, `App::SetProject`, boot verified
+- [x] `tests/test_project`: headless load→save→reload round-trip (`ARC_BUILD_TESTS` option)
+- [x] `AssetManager`: search paths (project dir → cwd; lives in AssetManager, NOT File —
+      File stays a dumb fs helper), UUID sidecars `<src>.arc.import` (commit them),
+      FNV-1a hash cache `NeedsReimport/MarkImported`, sync LoadText/LoadBinary,
+      `App::GetAssets()`; `tests/test_asset_manager` round-trip
+- [x] `.arc` scene format (YAML via **system yaml-cpp 0.9.0** — vendor pre-Android):
+      `SceneSerializer Save/Load` (entities + names + Transform v1; ids re-assigned
+      on load; Mesh/Texture/Lua serialize with their subsystems), **fixed M5 static
+      pools → instance pools** (std::any-typed), deterministic `Entities()` order,
+      `App::GetScene()` loads `main_scene`, `tests/test_scene` round-trip + isolation
       `AudioPlayer2D/3D`, master/SFX/music buses; decode WAV (own) + OGG (stb_vorbis)
 - [ ] Remove `Audio` miniaudio class → keep file as `docs/legacy-miniaudio.md` note
 - [ ] `tests/`: headless `Scene save→load`, `AssetManager` round-trip

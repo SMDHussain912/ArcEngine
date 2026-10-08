@@ -1,63 +1,77 @@
+// ArcRuntime (P0): runs the production App loop.
+// Usage: ArcRuntime [path/to/project.arc] [--frames N]
+//   project.arc fills window/physics defaults (P0 Step 2);
+//   --frames N caps frames for CI verification.
+#include "ArcEngine/Core/App.h"
 #include "ArcEngine/Core/Log.h"
-#include "ArcEngine/Core/Time.h"
+#include "ArcEngine/Core/Project.h"
 #include "ArcEngine/Core/Version.h"
-#include "ArcEngine/Core/Window.h"
-#include "ArcEngine/Renderer/GraphicsContext.h"
 
 #include <glad/gl.h>
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
+#include <cstdlib>
+#include <memory>
 #include <string>
 
-int main() {
+int main(int argc, char** argv) {
     Arc::Log::Init();
     Arc::Log::Info(std::string("ArcEngine v") + Arc::GetVersion());
 
-    Arc::WindowProps props;
-    props.Title = "ArcEngine — M1 Window";
-    props.Width = 1280;
-    props.Height = 720;
+    std::string projectPath;
+    Arc::AppConfig cfg;   // defaults when no project given
+    cfg.Title = "ArcEngine — P0 App loop";
+    uint64_t frameCap = 0;
 
-    Arc::Window window(props);
-    if (!window.IsValid()) {
-        Arc::Log::Error("Failed to create window. Exiting.");
-        return 1;
-    }
-
-    // M2: load GL entry points now that 4.6 Core context is current.
-    if (!Arc::GraphicsContext::Init()) return 1;
-
-    Arc::Time clock;
-    double titleTimer = 0.0;
-
-    // M1 loop: clear color pulses slowly so we can SEE the loop is alive
-    // without needing shaders/buffers yet (those come in M2).
-    while (!window.ShouldClose()) {
-        clock.Tick();
-
-        // Escape closes (Unity-like quick exit for dev)
-        GLFWwindow* native = window.NativeHandle();
-        if (glfwGetKey(native, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-            glfwSetWindowShouldClose(native, GLFW_TRUE);
-
-        float t = static_cast<float>(clock.Elapsed());
-        float r = 0.15f + 0.10f * t - 0.10f * static_cast<int>(t); // slow pulse, no <cmath> needed
-        if (r > 0.35f) r = 0.15f;
-        glClearColor(r, 0.20f, 0.30f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        window.SwapBuffers();
-        window.PollEvents();
-
-        titleTimer += clock.Delta();
-        if (titleTimer >= 0.5) {
-            titleTimer = 0.0;
-            int fps = static_cast<int>(clock.Fps() + 0.5f);
-            window.SetTitle("ArcEngine — M1 Window | " + std::to_string(fps) + " FPS");
+    for (int i = 1; i < argc; i++) {
+        const std::string a = argv[i];
+        if (a == "--frames" && i + 1 < argc) {
+            frameCap = std::strtoull(argv[i + 1], nullptr, 10);
+            i++;
+        } else if (!a.empty() && a[0] != '-') {
+            projectPath = a;
+        } else {
+            Arc::Log::Warn("Unknown arg: " + a);
         }
     }
 
-    Arc::Log::Info("Window closed. Goodbye!");
-    return 0;
+    std::shared_ptr<Arc::Project> project;
+    if (!projectPath.empty()) {
+        auto loaded = Arc::Project::Load(projectPath);
+        if (!loaded) return 1;
+        project = std::make_shared<Arc::Project>(std::move(*loaded));
+        cfg = project->ToAppConfig();
+    }
+    cfg.MaxFrames = frameCap;
+
+    Arc::App app(cfg);
+    if (project) app.SetProject(project);
+    double titleTimer = 0.0;
+
+    // P0 Step 1: physics hook is a counted no-op — Scene lands with the .arc step.
+    app.OnPhysics([](float fixedDt) { (void)fixedDt; });
+
+    app.OnUpdate([&](float dt) {
+        titleTimer += dt;
+        if (titleTimer >= 0.5) {
+            titleTimer = 0.0;
+            int fps = static_cast<int>(app.Fps() + 0.5f);
+            app.GetWindow()->SetTitle(
+                app.Config().Title + " | " + std::to_string(fps) + " FPS | " +
+                std::to_string(app.PhysicsSteps()) + " phys steps");
+        }
+    });
+
+    app.OnRender([&](float alpha) {
+        (void)alpha;
+        // Slow clear-color pulse proves the render hook runs every frame.
+        float t = static_cast<float>(app.Elapsed());
+        float r = 0.15f + 0.10f * t - 0.10f * static_cast<int>(t);
+        if (r > 0.35f) r = 0.15f;
+        glClearColor(r, 0.20f, 0.30f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+    });
+
+    app.OnShutdown([] { Arc::Log::Info("App shutdown hook."); });
+
+    return app.Run();
 }
 
