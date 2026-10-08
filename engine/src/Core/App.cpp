@@ -8,6 +8,7 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include <cmath>
+#include <filesystem>
 
 namespace Arc {
 
@@ -32,6 +33,13 @@ int App::Run() {
         Log::Error("App: window creation failed.");
         return 1;
     }
+
+    // Asset search paths: project dir wins, cwd is the fallback.
+    if (m_project && !m_project->FilePath.empty())
+        m_assets.AddSearchPath(
+            std::filesystem::path(m_project->FilePath).parent_path().string());
+    m_assets.AddSearchPath(".");
+
     if (!GraphicsContext::Init()) return 1;
     Input::Init(m_window->NativeHandle());
 

@@ -1,4 +1,5 @@
 #pragma once
+#include "ArcEngine/Assets/AssetManager.h"
 #include "ArcEngine/Core/Time.h"
 #include "ArcEngine/Core/Window.h"
 
@@ -57,6 +58,10 @@ public:
     void SetProject(std::shared_ptr<Project> p) { m_project = std::move(p); }
     Project* GetProject() { return m_project.get(); }
 
+    // Asset registry (P0 Step 3). Run() seeds search paths:
+    // project dir first, then cwd.
+    AssetManager& GetAssets() { return m_assets; }
+
     // Blocks until quit. Returns process exit code.
     int Run();
     void RequestQuit();
@@ -74,6 +79,7 @@ private:
     AppConfig m_cfg;
     std::unique_ptr<Window> m_window;
     std::shared_ptr<Project> m_project;
+    AssetManager m_assets;
     Time m_clock;
     double m_accumulator = 0.0;
     uint64_t m_frames = 0;

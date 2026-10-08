@@ -15,8 +15,10 @@ Goal: turn prototype into production base. No new gameplay yet.
 - [x] `Project` + `project.arc` load/save: tiny `key=value` parser (no YAML lib yet),
       `ToAppConfig()`, sample `projects/empty/`, `App::SetProject`, boot verified
 - [x] `tests/test_project`: headless load→save→reload round-trip (`ARC_BUILD_TESTS` option)
-- [ ] `Assets/AssetManager`: UUID registry, `assets/*.arc.import` cache,
-      sync loaders (async in P3), `File::SearchPaths`
+- [x] `AssetManager`: search paths (project dir → cwd; lives in AssetManager, NOT File —
+      File stays a dumb fs helper), UUID sidecars `<src>.arc.import` (commit them),
+      FNV-1a hash cache `NeedsReimport/MarkImported`, sync LoadText/LoadBinary,
+      `App::GetAssets()`; `tests/test_asset_manager` round-trip
 - [ ] `.arc` scene format (YAML): `Scene > Entities > Components` + load/save round-trip
 - [ ] `Audio/AudioServer` over **OpenAL**: device/context, Listener/Source/Buffer,
       `AudioPlayer2D/3D`, master/SFX/music buses; decode WAV (own) + OGG (stb_vorbis)
