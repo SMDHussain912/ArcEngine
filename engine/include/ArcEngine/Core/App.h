@@ -2,6 +2,7 @@
 #include "ArcEngine/Assets/AssetManager.h"
 #include "ArcEngine/Core/Time.h"
 #include "ArcEngine/Core/Window.h"
+#include "ArcEngine/Scene/Scene.h"
 
 #include <cstdint>
 #include <functional>
@@ -62,6 +63,10 @@ public:
     // project dir first, then cwd.
     AssetManager& GetAssets() { return m_assets; }
 
+    // Scene (P0 Step 4). Run() loads project->MainScene if set;
+    // empty until then / when project has no main scene.
+    Scene& GetScene() { return m_scene; }
+
     // Blocks until quit. Returns process exit code.
     int Run();
     void RequestQuit();
@@ -80,6 +85,7 @@ private:
     std::unique_ptr<Window> m_window;
     std::shared_ptr<Project> m_project;
     AssetManager m_assets;
+    Scene m_scene;
     Time m_clock;
     double m_accumulator = 0.0;
     uint64_t m_frames = 0;

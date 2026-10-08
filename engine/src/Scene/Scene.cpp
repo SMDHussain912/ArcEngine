@@ -1,5 +1,7 @@
 #include "ArcEngine/Scene/Scene.h"
 
+#include <algorithm>
+
 namespace Arc {
 
 Entity Scene::CreateEntity(const std::string& name) {
@@ -15,13 +17,14 @@ void Scene::DestroyEntity(Entity e) {
     if (!e.Valid()) return;
     m_alive[e.Id()] = false;
     m_names.erase(e.Id());
-    // NOTE: static component pools keep stale entries for M5 simplicity.
-    // Destroyed ids never get reused (m_nextId only grows), so Each() skips via m_alive.
+    // Component entries linger keyed by (scene-local) id; ids are never
+    // reused within an instance, so Each()/serialization skip them via m_alive.
 }
 
 void Scene::Clear() {
     m_names.clear();
     m_alive.clear();
+    m_pools.clear();
     m_nextId = 1;
 }
 
@@ -30,6 +33,9 @@ std::vector<Entity> Scene::Entities() {
     for (auto& [id, alive] : m_alive) {
         if (alive) out.emplace_back(this, id);
     }
+    // Deterministic creation order (ids ascend) — serialization + tests rely on it.
+    std::sort(out.begin(), out.end(),
+              [](const Entity& a, const Entity& b) { return a.Id() < b.Id(); });
     return out;
 }
 

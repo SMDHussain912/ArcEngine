@@ -19,7 +19,11 @@ Goal: turn prototype into production base. No new gameplay yet.
       File stays a dumb fs helper), UUID sidecars `<src>.arc.import` (commit them),
       FNV-1a hash cache `NeedsReimport/MarkImported`, sync LoadText/LoadBinary,
       `App::GetAssets()`; `tests/test_asset_manager` round-trip
-- [ ] `.arc` scene format (YAML): `Scene > Entities > Components` + load/save round-trip
+- [x] `.arc` scene format (YAML via **system yaml-cpp 0.9.0** — vendor pre-Android):
+      `SceneSerializer Save/Load` (entities + names + Transform v1; ids re-assigned
+      on load; Mesh/Texture/Lua serialize with their subsystems), **fixed M5 static
+      pools → instance pools** (std::any-typed), deterministic `Entities()` order,
+      `App::GetScene()` loads `main_scene`, `tests/test_scene` round-trip + isolation
 - [ ] `Audio/AudioServer` over **OpenAL**: device/context, Listener/Source/Buffer,
       `AudioPlayer2D/3D`, master/SFX/music buses; decode WAV (own) + OGG (stb_vorbis)
 - [ ] Remove `Audio` miniaudio class → keep file as `docs/legacy-miniaudio.md` note

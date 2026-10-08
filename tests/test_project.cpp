@@ -24,7 +24,7 @@ int main() {
     CHECK(p->VSync == true, "vsync parsed");
     CHECK(p->PhysicsHz == 60.0f, "physics_hz parsed");
     CHECK(p->WindowTitle == "ArcEngine — Empty Project", "title parsed");
-    CHECK(p->MainScene.empty(), "empty main_scene allowed");
+    CHECK(p->MainScene == "main.arc", "main_scene parsed");
 
     // 2. ToAppConfig mapping.
     Arc::AppConfig cfg = p->ToAppConfig();

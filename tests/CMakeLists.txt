@@ -13,3 +13,11 @@ set_target_properties(test_asset_manager PROPERTIES
   CXX_STANDARD_REQUIRED ON
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
 )
+
+add_executable(test_scene test_scene.cpp)
+target_link_libraries(test_scene PRIVATE ArcEngine)
+set_target_properties(test_scene PROPERTIES
+  CXX_STANDARD 17
+  CXX_STANDARD_REQUIRED ON
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
+)
