@@ -1,63 +1,60 @@
+// ArcRuntime (P0): runs the production App loop.
+// Same feel as the M1 demo (pulse + FPS title + ESC) but the loop is App's
+// fixed-step engine loop now: physics steps are COUNTED and shown in title.
+// Usage: ArcRuntime [--frames N]   (N caps frames — used by CI verification)
+#include "ArcEngine/Core/App.h"
 #include "ArcEngine/Core/Log.h"
-#include "ArcEngine/Core/Time.h"
 #include "ArcEngine/Core/Version.h"
-#include "ArcEngine/Core/Window.h"
-#include "ArcEngine/Renderer/GraphicsContext.h"
 
 #include <glad/gl.h>
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
+#include <cstdlib>
 #include <string>
 
-int main() {
+int main(int argc, char** argv) {
     Arc::Log::Init();
     Arc::Log::Info(std::string("ArcEngine v") + Arc::GetVersion());
 
-    Arc::WindowProps props;
-    props.Title = "ArcEngine — M1 Window";
-    props.Width = 1280;
-    props.Height = 720;
+    Arc::AppConfig cfg;
+    cfg.Title = "ArcEngine — P0 App loop";
+    cfg.Width = 1280;
+    cfg.Height = 720;
+    cfg.PhysicsHz = 60.0f;
+    cfg.QuitOnEscape = true;
 
-    Arc::Window window(props);
-    if (!window.IsValid()) {
-        Arc::Log::Error("Failed to create window. Exiting.");
-        return 1;
+    for (int i = 1; i < argc; i++) {
+        if (std::string(argv[i]) == "--frames" && i + 1 < argc)
+            cfg.MaxFrames = static_cast<uint64_t>(std::strtoull(argv[i + 1], nullptr, 10));
     }
 
-    // M2: load GL entry points now that 4.6 Core context is current.
-    if (!Arc::GraphicsContext::Init()) return 1;
-
-    Arc::Time clock;
+    Arc::App app(cfg);
     double titleTimer = 0.0;
 
-    // M1 loop: clear color pulses slowly so we can SEE the loop is alive
-    // without needing shaders/buffers yet (those come in M2).
-    while (!window.ShouldClose()) {
-        clock.Tick();
+    // P0 Step 1: physics hook is a counted no-op — Scene lands with the .arc step.
+    app.OnPhysics([](float fixedDt) { (void)fixedDt; });
 
-        // Escape closes (Unity-like quick exit for dev)
-        GLFWwindow* native = window.NativeHandle();
-        if (glfwGetKey(native, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-            glfwSetWindowShouldClose(native, GLFW_TRUE);
+    app.OnUpdate([&](float dt) {
+        titleTimer += dt;
+        if (titleTimer >= 0.5) {
+            titleTimer = 0.0;
+            int fps = static_cast<int>(app.Fps() + 0.5f);
+            app.GetWindow()->SetTitle(
+                "ArcEngine — P0 | " + std::to_string(fps) + " FPS | " +
+                std::to_string(app.PhysicsSteps()) + " phys steps");
+        }
+    });
 
-        float t = static_cast<float>(clock.Elapsed());
-        float r = 0.15f + 0.10f * t - 0.10f * static_cast<int>(t); // slow pulse, no <cmath> needed
+    app.OnRender([&](float alpha) {
+        (void)alpha;
+        // Slow clear-color pulse proves the render hook runs every frame.
+        float t = static_cast<float>(app.Elapsed());
+        float r = 0.15f + 0.10f * t - 0.10f * static_cast<int>(t);
         if (r > 0.35f) r = 0.15f;
         glClearColor(r, 0.20f, 0.30f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
+    });
 
-        window.SwapBuffers();
-        window.PollEvents();
+    app.OnShutdown([] { Arc::Log::Info("App shutdown hook."); });
 
-        titleTimer += clock.Delta();
-        if (titleTimer >= 0.5) {
-            titleTimer = 0.0;
-            int fps = static_cast<int>(clock.Fps() + 0.5f);
-            window.SetTitle("ArcEngine — M1 Window | " + std::to_string(fps) + " FPS");
-        }
-    }
-
-    Arc::Log::Info("Window closed. Goodbye!");
-    return 0;
+    return app.Run();
 }
 

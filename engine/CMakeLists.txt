@@ -5,6 +5,7 @@ add_library(ArcEngine STATIC
   src/Core/Window.cpp
   src/Core/Input.cpp
   src/Core/File.cpp
+  src/Core/App.cpp
   src/Renderer/GraphicsContext.cpp
   src/Renderer/Shader.cpp
   src/Renderer/Buffer.cpp
