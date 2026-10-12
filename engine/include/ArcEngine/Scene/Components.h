@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace Arc {
 
@@ -96,6 +97,13 @@ struct BoxCollider2DComponent {
     // Invalid hulls (collinear/non-convex-to-be) fall back to box at AddBody with an error log.
     Vec2 Vertices[8]{};
     int VertexCount = 0;       // 0..8; >= 3 selects the polygon shape
+    // Chain terrain outline (P1 Step 8): >= 2 points selects the chain shape
+    // (one-sided — collides on the RIGHT side of the point order, so walkable
+    // ground winds right-to-left or sets ChainFlip). ChainLoop closes last->
+    // first (needs >= 3). EdgeCollider2D lite = a 2-point open chain.
+    std::vector<Vec2> Chain;
+    bool ChainLoop = false;
+    bool ChainFlip = false;
     float Density = 1.0f;      // kg/m^2 (drives mass; ignored for static bodies)
     float Friction = 0.3f;     // Coulomb friction [0,1]
     float Restitution = 0.0f;  // bounciness [0,1]

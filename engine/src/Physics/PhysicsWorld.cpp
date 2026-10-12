@@ -169,13 +169,84 @@ bool PhysicsWorld::AddBody(Scene& scene, Entity e) {
         sd.filter.categoryBits = rb.Category;
         sd.filter.maskBits = rb.Mask;
         sd.filter.groupIndex = rb.GroupIndex;
-        // Shape selection (P1 Steps 5-7), most-specific first:
-        //   VertexCount >= 3 -> convex polygon (hull-validated; falls back to
-        //                       box with an error log if b2ComputeHull fails)
-        //   Height > 0       -> capsule (vertical segment + Radius caps)
-        //   Radius  > 0      -> circle
-        //   otherwise        -> box (half-extents from Size)
-        if (col.VertexCount >= 3) {
+        // Shape selection (P1 Steps 5-8), most-specific first:
+        //   Chain.size() >= 2 -> one-sided chain terrain (b2CreateChain)
+        //   VertexCount >= 3  -> convex polygon (hull-validated; falls back to
+        //                        box with an error log if b2ComputeHull fails)
+        //   Height > 0        -> capsule (vertical segment + Radius caps)
+        //   Radius  > 0       -> circle
+        //   otherwise         -> box (half-extents from Size)
+        if (col.Chain.size() >= 2) {
+            // Chain (P1 Step 8): one-sided terrain — collision only on the
+            // RIGHT side of the point order (b2RightPerp side test), so
+            // walkable ground winds right-to-left unless ChainFlip reverses.
+            if (col.IsSensor)
+                Arc::Log::Warn("PhysicsWorld: IsSensor is not supported on chain "
+                               "shapes (entity " + std::to_string(e.Id()) +
+                               ") — chain will be solid");
+            const size_t n = col.Chain.size();
+            const bool loop = col.ChainLoop;
+            // Box2D debug-asserts any segment/ghost pair <= B2_LINEAR_SLOP, so
+            // pre-validate here: bad input degrades to a box instead of
+            // aborting a debug build.
+            bool ok = !loop || n >= 3;
+            const size_t segs = loop ? n : n - 1;
+            for (size_t i = 0; i < segs && ok; ++i) {
+                const Vec2& a = col.Chain[i];
+                const Vec2& b = col.Chain[(i + 1) % n];
+                float dx = b.x - a.x, dy = b.y - a.y;
+                if (dx * dx + dy * dy <= B2_LINEAR_SLOP * B2_LINEAR_SLOP)
+                    ok = false;
+            }
+            std::vector<b2Vec2> pts(n);
+            for (size_t i = 0; i < n; ++i) {
+                const Vec2& v = col.Chain[col.ChainFlip ? (n - 1 - i) : i];
+                pts[i] = {v.x, v.y};
+            }
+            b2ChainId chain{};
+            if (ok) {
+                b2ChainDef cd = b2DefaultChainDef();
+                cd.points = pts.data();
+                cd.pointCount = static_cast<int>(n);
+                cd.isLoop = loop;
+                if (!loop) {
+                    // Extrapolated ghost ends (standard practice): ghost-to-
+                    // end distance equals the adjacent segment length.
+                    cd.ghost1 = {2.0f * pts[0].x - pts[1].x,
+                                 2.0f * pts[0].y - pts[1].y};
+                    const size_t m = n - 1;
+                    cd.ghost2 = {2.0f * pts[m].x - pts[m - 1].x,
+                                 2.0f * pts[m].y - pts[m - 1].y};
+                }
+                b2SurfaceMaterial mat{};
+                mat.friction = col.Friction;
+                mat.restitution = col.Restitution;
+                cd.materials = &mat;
+                cd.materialCount = 1;
+                cd.filter.categoryBits = rb.Category;
+                cd.filter.maskBits = rb.Mask;
+                cd.filter.groupIndex = rb.GroupIndex;
+                cd.enableSensorEvents = true;
+                chain = b2CreateChain(body, &cd);
+            }
+            if (b2Chain_IsValid(chain)) {
+                // b2CreateChain hard-codes contact events OFF per segment;
+                // re-enable so PollCollisionEvents treats chain ground like
+                // every other shape (P1 Step 4 parity).
+                int segCount = b2Chain_GetSegmentCount(chain);
+                std::vector<b2ShapeId> shapes(static_cast<size_t>(segCount));
+                int got = b2Chain_GetSegments(chain, shapes.data(), segCount);
+                for (int i = 0; i < got; ++i)
+                    b2Shape_EnableContactEvents(shapes[i], true);
+            } else {
+                Arc::Log::Error("PhysicsWorld: invalid chain on entity " +
+                                std::to_string(e.Id()) + " (too few points, " +
+                                "segment shorter than slop, or bad loop) — " +
+                                "falling back to box");
+                b2Polygon box = b2MakeBox(col.Size.x * 0.5f, col.Size.y * 0.5f);
+                b2CreatePolygonShape(body, &sd, &box);
+            }
+        } else if (col.VertexCount >= 3) {
             b2Vec2 pts[8];
             int n = col.VertexCount > 8 ? 8 : col.VertexCount;
             for (int i = 0; i < n; ++i)

@@ -245,6 +245,95 @@ int main() {
         pw.Destroy();
     }
 
+    // --- 4d. Chain terrain: ONE-SIDED collision on the right of travel ---
+    {
+        // A: flat chain wound right->left (travel -x => right side +y = up).
+        // A box dropped from above must rest ON the line (y = 0 + 0.5); if
+        // the winding doc were wrong it falls through.
+        Arc::Scene s;
+        auto ground = s.CreateEntity("ChainGround");
+        ground.AddComponent<Arc::RigidBody2DComponent>().Type =
+            Arc::RigidBodyType::Static;
+        auto& gcol = ground.AddComponent<Arc::BoxCollider2DComponent>();
+        gcol.Chain = {{10.0f, 0.0f}, {-10.0f, 0.0f}};
+
+        auto box = s.CreateEntity("Box");
+        box.GetComponent<Arc::TransformComponent>().Position = {0.0f, 3.0f, 0.0f};
+        box.AddComponent<Arc::RigidBody2DComponent>().Type =
+            Arc::RigidBodyType::Dynamic;
+        auto& bcol = box.AddComponent<Arc::BoxCollider2DComponent>();
+        bcol.Size = {1.0f, 1.0f};
+
+        Arc::PhysicsWorld pw;
+        pw.Create();
+        CHECK(pw.AddBody(s, ground), "chain body added");
+        CHECK(pw.AddBody(s, box), "dropper added");
+        RunSeconds(pw, s, 3.0f);
+        float yA = box.GetComponent<Arc::TransformComponent>().Position.y;
+        CHECK(yA > 0.4f && yA < 0.6f,
+              "box lands on walkable chain wound right-to-left");
+        pw.Destroy();
+    }
+    {
+        // B: one-sided proof. Same chain; box fired UP from y=-1. Unimpeded
+        // it crosses y=0 and is at ~+2.04 after 0.6s. A two-sided chain
+        // blocks it at the underside (~y=-0.5) and it falls back below.
+        Arc::Scene s;
+        auto ground = s.CreateEntity("ChainGround");
+        ground.AddComponent<Arc::RigidBody2DComponent>().Type =
+            Arc::RigidBodyType::Static;
+        auto& gcol = ground.AddComponent<Arc::BoxCollider2DComponent>();
+        gcol.Chain = {{10.0f, 0.0f}, {-10.0f, 0.0f}};
+
+        auto box = s.CreateEntity("Box");
+        box.GetComponent<Arc::TransformComponent>().Position = {0.0f, -1.0f, 0.0f};
+        box.AddComponent<Arc::RigidBody2DComponent>().Type =
+            Arc::RigidBodyType::Dynamic;
+        auto& bcol = box.AddComponent<Arc::BoxCollider2DComponent>();
+        bcol.Size = {1.0f, 1.0f};
+
+        Arc::PhysicsWorld pw;
+        pw.Create();
+        pw.AddBody(s, ground);
+        pw.AddBody(s, box);
+        pw.SetLinearVelocity(box, {0.0f, 8.0f});
+        for (int i = 0; i < 36; ++i) pw.Step(s, 1.0f / 60.0f); // 0.6 s
+        float yB = box.GetComponent<Arc::TransformComponent>().Position.y;
+        CHECK(yB > 0.5f,
+              "one-sided: box passed through the underside of the chain");
+        pw.Destroy();
+    }
+    {
+        // C: closed loop bowl, wound clockwise => interior on the right of
+        // travel. The box passes through the top edge (collides only from
+        // below) and rests on the bowl FLOOR at y = -1 + 0.5 = -0.5. A
+        // two-sided loop would stop it on TOP at y = 1.5.
+        Arc::Scene s;
+        auto bowl = s.CreateEntity("Bowl");
+        bowl.AddComponent<Arc::RigidBody2DComponent>().Type =
+            Arc::RigidBodyType::Static;
+        auto& bcol = bowl.AddComponent<Arc::BoxCollider2DComponent>();
+        bcol.Chain = {{-1.0f, -1.0f}, {-1.0f, 1.0f}, {1.0f, 1.0f}, {1.0f, -1.0f}};
+        bcol.ChainLoop = true;
+
+        auto box = s.CreateEntity("Box");
+        box.GetComponent<Arc::TransformComponent>().Position = {0.0f, 3.0f, 0.0f};
+        box.AddComponent<Arc::RigidBody2DComponent>().Type =
+            Arc::RigidBodyType::Dynamic;
+        auto& bbc = box.AddComponent<Arc::BoxCollider2DComponent>();
+        bbc.Size = {1.0f, 1.0f};
+
+        Arc::PhysicsWorld pw;
+        pw.Create();
+        CHECK(pw.AddBody(s, bowl), "loop chain added");
+        CHECK(pw.AddBody(s, box), "bowl dropper added");
+        RunSeconds(pw, s, 3.0f);
+        float yC = box.GetComponent<Arc::TransformComponent>().Position.y;
+        CHECK(yC > -0.7f && yC < -0.3f,
+              "box inside loop bowl (entered through top, rests on floor)");
+        pw.Destroy();
+    }
+
     // --- 5. Entities without rigid bodies / post-destroy are safe no-ops ---
     {
         Arc::Scene s;

@@ -78,6 +78,16 @@ int main() {
     rockCol.Vertices[2] = {-0.7f, 0.0f};
     rockCol.Vertices[3] = {0.0f, -0.7f};
 
+    // Chain terrain (P1 Step 8): >= 2 points, one-sided, with loop+flip flags.
+    Arc::Entity terrain = sceneA.CreateEntity("Terrain");
+    terrain.GetComponent<Arc::TransformComponent>().Position = {6.0f, -5.0f, 0.0f};
+    terrain.AddComponent<Arc::RigidBody2DComponent>().Type =
+        Arc::RigidBodyType::Static;
+    auto& terrCol = terrain.AddComponent<Arc::BoxCollider2DComponent>();
+    terrCol.Chain = {{2.0f, 0.0f}, {0.0f, 1.0f}, {-2.0f, 0.0f}};
+    terrCol.ChainLoop = true;
+    terrCol.ChainFlip = true;
+
     // A bare entity: must stay free of physics components after round-trip.
     Arc::Entity plain = sceneA.CreateEntity("Plain");
 
@@ -137,8 +147,9 @@ int main() {
     }
     CHECK(foundBox, "Box entity survives save/load");
     CHECK(foundGround, "Ground entity survives save/load");
-    // Circle + capsule + polygon collider round-trips (P1 Steps 5-7).
-    bool foundBall = false, foundPill = false, foundRock = false;
+    // Circle + capsule + polygon + chain collider round-trips (Steps 5-8).
+    bool foundBall = false, foundPill = false, foundRock = false,
+         foundTerrain = false;
     for (Arc::Entity e : loaded.Entities()) {
         if (e.Name() == "Ball") {
             foundBall = true;
@@ -161,11 +172,26 @@ int main() {
                   "polygon vertex 3 round-trip");
             CHECK(Near(c.Radius, 0.0f) && Near(c.Height, 0.0f),
                   "rock has no radius/height (polygon signal only)");
+            CHECK(c.Chain.empty(), "rock has no chain");
+        } else if (e.Name() == "Terrain") {
+            foundTerrain = true;
+            const auto& c = e.GetComponent<Arc::BoxCollider2DComponent>();
+            CHECK(c.Chain.size() == 3, "chain point count round-trip");
+            CHECK(c.ChainLoop, "chain_loop round-trip");
+            CHECK(c.ChainFlip, "chain_flip round-trip");
+            if (c.Chain.size() == 3) {
+                CHECK(Near(c.Chain[0].x, 2.0f) && Near(c.Chain[0].y, 0.0f),
+                      "chain p0 round-trip");
+                CHECK(Near(c.Chain[2].x, -2.0f) && Near(c.Chain[2].y, 0.0f),
+                      "chain p2 round-trip");
+            }
+            CHECK(c.VertexCount == 0, "terrain is chain-only (no polygon)");
         }
     }
     CHECK(foundBall, "Ball entity survives save/load");
     CHECK(foundPill, "Pill entity survives save/load");
     CHECK(foundRock, "Rock entity survives save/load");
+    CHECK(foundTerrain, "Terrain entity survives save/load");
 
     std::remove(tmpPath);
     std::printf("test_physics_serialize: ALL OK\n");

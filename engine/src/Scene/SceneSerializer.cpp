@@ -198,6 +198,13 @@ bool SceneSerializer::Save(Scene& scene, const std::string& path) {
                 for (int i = 0; i < n; ++i) poly.push_back(Vec2Node(col.Vertices[i]));
                 ccn["polygon"] = poly;
             }
+            if (col.Chain.size() >= 2) {
+                YAML::Node ch;
+                for (const auto& p : col.Chain) ch.push_back(Vec2Node(p));
+                ccn["chain"] = ch;
+                ccn["chain_loop"] = col.ChainLoop;
+                ccn["chain_flip"] = col.ChainFlip;
+            }
             ccn["density"] = col.Density;
             ccn["friction"] = col.Friction;
             ccn["restitution"] = col.Restitution;
@@ -359,6 +366,21 @@ bool SceneSerializer::Load(const std::string& path, Scene& outScene) {
                         col.Vertices[i] =
                             NodeVec2(ccn["polygon"][i], Vec2(0.0f, 0.0f));
                     col.VertexCount = n;
+                }
+                if (ccn["chain"] && ccn["chain"].IsSequence()) {
+                    // Chain terrain (P1 Step 8). Cap defensively against
+                    // absurd files; segment validation happens at AddBody.
+                    col.Chain.clear();
+                    size_t n = ccn["chain"].size();
+                    if (n > 4096) n = 4096;
+                    col.Chain.reserve(n);
+                    for (size_t i = 0; i < n; ++i)
+                        col.Chain.push_back(
+                            NodeVec2(ccn["chain"][i], Vec2(0.0f, 0.0f)));
+                    col.ChainLoop =
+                        ccn["chain_loop"] ? ccn["chain_loop"].as<bool>(false) : false;
+                    col.ChainFlip =
+                        ccn["chain_flip"] ? ccn["chain_flip"].as<bool>(false) : false;
                 }
                 col.Density = ccn["density"] ? ccn["density"].as<float>(1.0f) : 1.0f;
                 col.Friction = ccn["friction"] ? ccn["friction"].as<float>(0.3f) : 0.3f;

@@ -591,13 +591,21 @@ void ArcEditor::RenderSceneToFBO(int w, int h) {
             glDeleteVertexArrays(1, &ba);
             m_sceneShader->Bind();
         }
-        // P1 Step 2/Steps 5-7: physics collider outline. Polygon when
-        // VertexCount >= 3, capsule when Height > 0, circle when Radius > 0,
-        // box otherwise — same most-specific-first selection AddBody uses.
+        // P1 Step 2/Steps 5-8: physics collider outline. Chain when >= 2
+        // points, polygon when VertexCount >= 3, capsule when Height > 0,
+        // circle when Radius > 0, box otherwise — same selection AddBody uses.
         if (m_showColliders && e.HasComponent<BoxCollider2DComponent>()) {
             const auto& col = e.GetComponent<BoxCollider2DComponent>();
             std::vector<float> verts;
-            if (col.VertexCount >= 3) {
+            if (col.Chain.size() >= 2) {
+                // Chain terrain: local points + body position; loop closes
+                // via GL_LINE_LOOP, open chains strip.
+                verts.reserve(col.Chain.size() * 2);
+                for (const auto& p : col.Chain) {
+                    verts.push_back(t.Position.x + p.x);
+                    verts.push_back(t.Position.y + p.y);
+                }
+            } else if (col.VertexCount >= 3) {
                 // Polygon outline: local-space vertices + body position.
                 int n = col.VertexCount > 8 ? 8 : col.VertexCount;
                 verts.reserve(static_cast<size_t>(n) * 2);
@@ -668,10 +676,13 @@ void ArcEditor::RenderSceneToFBO(int w, int h) {
                 m_flatShader->SetVec3("u_Color", 0.35f, 0.95f, 0.45f);
             else
                 m_flatShader->SetVec3("u_Color", 0.40f, 0.80f, 0.85f);
-            if (col.Radius > 0.0f || col.Height > 0.0f)
+            // Chain open -> strip; circle/capsule -> strip; box/polygon/
+            // chain-loop -> self-closing loop over verts.size()/2.
+            bool strip = (col.Radius > 0.0f || col.Height > 0.0f) ||
+                         (col.Chain.size() >= 2 && !col.ChainLoop);
+            if (strip)
                 glDrawArrays(GL_LINE_STRIP, 0, static_cast<int>(verts.size() / 2));
             else
-                // Box and polygon outlines close themselves (4 / VertexCount).
                 glDrawArrays(GL_LINE_LOOP, 0, static_cast<int>(verts.size() / 2));
             glBindVertexArray(0);
             glDeleteBuffers(1, &cv);
@@ -1539,6 +1550,27 @@ void ArcEditor::InspectorWindow() {
             if (ImGui::DragFloat("Height (0 = box/circle)", &col.Height, 0.01f, 0.0f,
                                  100.0f, "%.2f"))
                 m_dirty = true;
+            // Chain terrain (P1 Step 8): >= 2 points, one-sided — collisions
+            // register on the RIGHT side of point order (walkable ground =
+            // right-to-left, or tick Flip). Chain loop closes last->first.
+            int chainN = static_cast<int>(col.Chain.size());
+            if (ImGui::InputInt("Chain pts (0=none)", &chainN)) {
+                if (chainN < 0) chainN = 0;
+                if (chainN > 256) chainN = 256;
+                col.Chain.resize(static_cast<size_t>(chainN));
+                m_dirty = true;
+            }
+            for (int i = 0; i < static_cast<int>(col.Chain.size()); ++i) {
+                ImGui::PushID(1000 + i);
+                char plbl[8];
+                std::snprintf(plbl, sizeof(plbl), "P%d", i);
+                if (ImGui::DragFloat2(plbl, &col.Chain[static_cast<size_t>(i)].x,
+                                      0.01f, -1000.0f, 1000.0f, "%.2f"))
+                    m_dirty = true;
+                ImGui::PopID();
+            }
+            if (ImGui::Checkbox("Chain loop", &col.ChainLoop)) m_dirty = true;
+            if (ImGui::Checkbox("Chain flip winding", &col.ChainFlip)) m_dirty = true;
             // Polygon (P1 Step 7): >= 3 local-space vertices select the polygon
             // shape (hull-validated at Play; degenerate falls back to box).
             if (ImGui::InputInt("Poly verts (0=box)", &col.VertexCount)) {
