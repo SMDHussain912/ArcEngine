@@ -71,7 +71,6 @@ target_include_directories(ArcEngine PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/imgui/imgui-1.92.9/backends
 )
 target_link_libraries(ArcEngine PUBLIC ${GLFW_LIBRARIES} OpenGL::GL glad stb miniaudio glm::glm yaml-cpp box2d pthread m dl)
-target_compile_options(ArcEngine PUBLIC ${GLFW_CFLAGS_OTHER})
 
 set_target_properties(ArcEngine PROPERTIES
   CXX_STANDARD 17
