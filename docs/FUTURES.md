@@ -101,6 +101,23 @@
 - [ ] Lua 3D API: transform3d, camera helpers, spawn_model; accept: lit 3D level + rigid bodies + orbit cam, GLES-compatible shaders
 - [ ] P2 demo: `examples/14-model3d` lit glTF room + falling crates + orbit camera — tag v1.0-p2
 
+### 3D World-building (we have ZERO — researched LearnOpenGL terrain + O3DE gems)
+- [ ] Step 3D-18 Terrain: heightmap import → CPU mesh (no GPU tessellation — GLES can't), 4-texture splatmap blend (grass/rock/sand/snow by height+slope), hole flag, editor height brush lite — `examples/16-terrain`
+- [ ] Step 3D-19 Water lite: animated normal-scroll plane + fresnel + sky tint (no mirrored scene — too costly on phones), shore foam band, swim-blocker volume. Lakes, not oceans
+- [ ] Step 3D-20 Sky v2 + clouds: gradient + sun disc + noise-scrolled cloud billboard layer, day-night curve drives sun/fog/ambient together
+- [ ] Step 3D-21 Vegetation lite: instanced grass tufts (crossed quads + wind sway shader) + trees (2 LODs + billboard far), editor scatter brush with density mask
+- [ ] Step 3D-22 White-box tools: sculpt/place geometric volumes in-editor to sketch levels fast (O3DE White Box idea), one-click convert to static meshes
+
+### 3D Look-dev (beyond fog + bloom-lite)
+- [ ] Step 3D-23 Post FX stack: ONE fullscreen pass — vignette + color grade (lift/gamma/gain LUT-lite) + FXAA + camera-motion-blur-lite, per-effect toggles, GLES-safe
+- [ ] Step 3D-24 Decals: projected quads pool (bullet holes, footprints, scorch), fade-out + cap, editor decal preview
+- [ ] Step 3D-25 Shadows v1: single directional shadow map (2048, PCF-lite) + blob-shadow fallback for phones
+
+### 3D Feel + systems (invisible plumbing every 3D game needs)
+- [ ] Step 3D-26 Camera effects: FOV kick (sprint), trauma shake (port from 2D), underwater tint zone, landing dip
+- [ ] Step 3D-27 3D audio hooks: positional OpenAL emitters + reverb zones (cave vs field), footstep material switch (grass/stone/wood)
+- [ ] Step 3D-28 Interaction system: raycast interact (press E: pickup/door/NPC), highlight outline, hold-to-use progress bar, test scene
+
 ## P3 — Editor (visual building)
 - [x] Done: ImGui Hierarchy/Inspector/Viewport/Assets/Console, Play/Stop, gizmos, undo/redo
 - [ ] Assets browser panel (real file view + import status)
