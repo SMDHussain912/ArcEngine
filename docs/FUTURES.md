@@ -162,6 +162,27 @@
 - [ ] Debug console: in-game command line (`give_coins 99`, `godmode`, `tp x y`), command registry API, history + autocomplete lite, F8 toggle
 - [ ] Capture + share: screenshot PNG key, GIF-lite recorder (fixed 320px, 10s cap) for sharing moments
 
+## X — Export + Publish ("ArcBuilder": press Build, get a game — researched Godot presets + itch/Steam/Play checklists)
+> Today: ONE Gradle line in P4. No presets, no packer, no signing, no store path. A game you can't ship is a toy.
+> Research: Godot (export presets + templates + per-platform options + keystore signing + runnable dry-run), itch.io (one zip per platform + demo flag + press keys + page art 630x500), Steam/Play (achievements/cloud, Asset Delivery).
+- [ ] Step X1 Export presets: per-project `export.arc` (name, id, version, icon, orientation, presets list), editor Export dialog (preset table + options + dry-run validate), `tools/arc_export` CLI (same pipeline headless for CI)
+- [ ] Step X2 Asset packer: collect project.arc deps → content-addressed `.arcpak` (lz4-lite), UUID sidecars honored, hash-skip unchanged, mount priority (base → patch → DLC), test round-trip
+- [ ] Step X3 Linux builder: folder + AppImage + .tar.gz, .desktop + icon, rpath-fixed libs, `chmod +x` smoke-run test, itch-zip layout (one zip, README, demo flag)
+- [ ] Step X4 Android builder (APK first, AAB second): android/ template + Gradle wrapper pin, debug key auto-sign, release keystore wizard (generate + store password), icons/splash densities, permissions picker (vibrate/internet), versionCode bump, install-to-device button (`adb install -r`), Play Asset Delivery note for DLC
+- [ ] Step X5 Web lite (stretch, after P4): Emscripten build (GLES→WebGL2, single .html + .wasm + .pak), itch HTML5 embed sizing, loading bar, audio-unlock-on-tap note
+- [ ] Step X6 Store checklist panel: per-target status (icons? signed? version bumped? store art 630x500?), press-key generator, Steam AppID + achievements/cloud stub file, Play listing stub (feature graphic text), pre-flight warnings before Build
+- [ ] Step X7 One-click publish: Build → Zip → Upload (itch.io Butler-compatible layout + API-key slot), release-notes prompt, channel (stable/beta/demo), rollback note (keep last 3 builds)
+
+## ★ — Own ideas (nobody does these — OUR signature)
+> The lane: "the engine that makes your game FEEL alive in a weekend." Every ★ item is demoable in <60s.
+- [ ] ★ Juice Timeline: record gameplay → scrub slow-mo replay with auto juice-markers (hits, landings, pickups) → export GIF/video. Replay (planned) + capture (planned) FUSED into one tool. No engine has this.
+- [ ] ★ Feel presets: one-click "game feel packs" (Juicy Platformer / Punchy Shooter / Cozy RPG): shake curves + hit-stop ms + flash colors + sound pitch range + particle bursts, all tuned, all overridable. Godot/GDevelop make you hand-tune; we ship taste.
+- [ ] ★ Ghost multiplayer lite: record your run → race your ghost (platformers) / review enemy ghost (fighters). Replay gives it free; deterministic core makes ghosts EXACT.
+- [ ] ★ Living levels: ambient-life emitter (birds/insects/leaves drift through scenes on spline paths, zero gameplay cost) + day-cycle director (light/desat/audio shift by clock). Dead scenes feel empty; ours breathe by default.
+- [ ] ★ Director mode: in-editor "auto-playtest bot" (random-but-seeded inputs) that plays your level, reports stuck spots + FPS dips + unreachable coins, drops pins on the map. Playtesting without players.
+- [ ] ★ Remix builds: player-facing variant system — ship ONE game, players remix (speed x2, low-grav, mirror world) via seed string; engine enforces determinism so remixes are shareable + leaderboard-fair.
+- [ ] ★ Instant phone preview: editor "Preview" button → LAN server → phone browser/ArcPreview app streams the running game (GDevelop QR idea, ours over plain HTTP + input echo). No cable, no APK, 5 seconds.
+
 ## V1.1+ (deliberately deferred — do NOT build in V1)
 - Networking, navmesh/pathfinding, TileMap autotiling, consoles, visual scripting v1.
   (Promoted OUT: skeletal retargeting → A8, particles v2 → A9.)
