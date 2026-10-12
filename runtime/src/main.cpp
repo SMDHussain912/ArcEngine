@@ -6,6 +6,10 @@
 #include "ArcEngine/Core/Log.h"
 #include "ArcEngine/Core/Project.h"
 #include "ArcEngine/Core/Version.h"
+#include "ArcEngine/Physics/PhysicsWorld.h"
+#include "ArcEngine/Scene/Components.h"
+#include "ArcEngine/Scene/Entity.h"
+#include "ArcEngine/Scene/Scene.h"
 
 #include <glad/gl.h>
 #include <cstdlib>
@@ -46,8 +50,21 @@ int main(int argc, char** argv) {
     if (project) app.SetProject(project);
     double titleTimer = 0.0;
 
-    // P0 Step 1: physics hook is a counted no-op — Scene lands with the .arc step.
-    app.OnPhysics([](float fixedDt) { (void)fixedDt; });
+    // P1 Step 2: real Box2D world. Register every rigid entity once, then let
+    // App's fixed-step loop drive it. Bodies write poses into transforms.
+    Arc::PhysicsWorld physics;
+    Arc::Scene& scene = app.GetScene();
+    physics.Create();
+    for (Arc::Entity e : scene.Entities())
+        if (e.HasComponent<Arc::RigidBody2DComponent>()) physics.AddBody(scene, e);
+    Arc::Log::Info("Runtime: " + std::to_string(physics.BodyCount()) +
+                   " physics bodies registered.");
+
+    app.OnPhysics([&](float fixedDt) {
+        // PhysicsWorld::Step already runs its own fixed 1/60 accumulator; App
+        // hands us a fixed dt, so one sim tick per physics callback.
+        physics.Step(scene, fixedDt);
+    });
 
     app.OnUpdate([&](float dt) {
         titleTimer += dt;

@@ -43,8 +43,32 @@ Stack: `C++17 + OpenGL 4.6 -> GLES 3.2 + Lua 5.4 + sol2 + GLFW (Linux) -> SDL/EG
 - `Audio` (miniaudio v0.11.25 vendored, Play/SetMasterVolume, silent-continue if no device), `assets/audio/blip.wav` by `tools/make_test_wav.py`
 - `examples/06-texture`: textured quad + blip on Space/click, WASD moves
 
-## M7 Editor
-- ImGui: Hierarchy, Inspector, Viewport
+## M7 Editor [DONE — pass 2]
+- ImGui 1.92.9 vendored (master, no docking): Hierarchy, Inspector, Viewport (off-screen FBO), Console, status bar — fixed panel layout (menu 24 / toolbar 36 / hierarchy 250 / inspector 300 / console 170)
+- Play/Pause/Stop with scene backup+restore, undo/redo (transform entries), Ctrl+S/O/Z/Y shortcuts, F5/F6 play controls
+- Components in editor: Transform (deg rotation), Mesh (7 primitives + tint), Camera, Light, GUI, Sprite — add/remove/duplicate, .arc-scene-2 save/load
+- Viewport: ortho pan/zoom camera, click-select picking, translate/rotate/scale gizmo, grid, entity icons ([#] mesh, [s] sprite)
+- Entity menu: empty/mesh/camera/light/GUI/sprite creation + Load Starter Scene
+
+## P1 2D [in progress]
+- Step 1 Sprite2D batcher: `SpriteComponent` (texture path, tint, UV region, flip, filter, layer, size) + `SpriteBatch` — stable sort by (Layer, TexturePath), one indexed draw per texture bind, streaming VBO, alpha blend, texture cache + `ReleaseGL()`
+- `examples/07-sprites`: 4 sprites / 1 bind verified on Intel HD 620; inspector edits sprite fields live
+- Editor viewport renders sprites via the batcher; .arc sprite round-trip covered by `tests/test_sprites`
+- Step 2 Physics (Box2D 3.x): vendored `third_party/box2d` (C API), linked into `ArcEngine` as `libbox2d.a`
+  - Box2D lib compiled with `BOX2D_USER_CONFIG="box2d/Config.h"` → resolves to `engine/include/box2d/Config.h` (float precision + W4 solver) so lib and consumers share one ABI
+  - `PhysicsWorld` — PIMPL facade so `b2*` C types stay out of gameplay headers; fixed 1/60 step with accumulator, single-threaded deterministic solve; two-way transform sync (bodies drive rendering)
+  - `RigidBody2DComponent` (Static/Kinematic/Dynamic, FixedRotation, GravityScale, damping) + `BoxCollider2DComponent` (size, density, friction, restitution, sensor)
+  - `AddBody/RemoveBody/HasBody/Step`, `Get/SetLinearVelocity`, `GetAngularVelocity`, `ApplyImpulse/ApplyForce`, `Teleport`, `Get/SetGravity`, `BodyCount`
+  - `examples/08-physics`: crate falls onto a static floor + settles; SPACE drops more crates, ESC quits
+  - Editor integration: Inspector UI for both components (Body Type combo, Fixed Rotation, Gravity Scale, damping; collider Size/Density/Friction/Restitution/Is sensor), add/remove via Inspector + hierarchy menu, "Create Physics Body" entity preset, viewport collider outlines (`m_showColliders`), and physics stepping only while `PlayState::Playing` (world created on Play, destroyed on Stop)
+  - `.arc` serialization: `rigidbody2d` (type/fixed_rotation/gravity_scale/linear_damping/angular_damping) + `boxcollider2d` (size/density/friction/restitution/is_sensor) round-trip, with safe defaults on load
+  - `tests/test_physics`: gravity integration, static immunity, fixed-rotation lock, velocity/impulse/teleport, box-rests-on-floor (no tunneling), no-op safety (no rigid body / post-Destroy) — all green
+  - `tests/test_physics_serialize`: RigidBody2D + BoxCollider2D .arc save/load round-trip (all fields, static vs dynamic, transform coexists, plain entity stays physics-free) — all green
+  - Step 3 Collision filtering + raycast (PhysicsServer2D queries): `RigidBody2DComponent` gains Category/Mask/GroupIndex wired into the shape's `b2Filter` (category/mask/group — group != 0 forces same-group collision verdict; entity id stashed in Box2D body `userData` to map hits back to ECS)
+    - `PhysicsWorld::Raycast(scene, origin, translation)` → `RaycastHit { bool hit; Entity entity; Vec2 point; Vec2 normal; float fraction }` — closest-first, skips shapes whose filter rejects the caller category/mask, safe empty result when no body/geometry hit
+    - `.arc` serialization: `category/mask/group_index` under `rigidbody2d` round-trip
+    - `tests/test_physics_filter`: same-category collides, disjoint masks pass through, forced-same-group ignores mask, raycast hits nearest body, filter-excluded shape skipped, ray-into-empty-space misses — all green
+    - `tests/test_physics_serialize` extended: category/mask/group_index round-trip — all green
 
 ## M8 Android
 - NDK + EGL + GLES, touch input, APK

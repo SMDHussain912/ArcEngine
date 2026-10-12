@@ -14,14 +14,17 @@ add_library(ArcEngine STATIC
   src/Renderer/OpenGLRenderer.cpp
   src/Renderer/RenderCommand.cpp
   src/Renderer/Texture.cpp
+  src/Renderer/SpriteBatch.cpp
   src/Audio/Audio.cpp
   src/Scene/Scene.cpp
   src/Scene/SceneSerializer.cpp
   src/Scene/MeshComponent.cpp
+  src/Physics/PhysicsWorld.cpp
 )
 
 target_include_directories(ArcEngine PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/box2d/include
 )
 
 # GLFW for windowing (M1). System package on Linux dev machine.
@@ -45,6 +48,11 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/third_party/stb ${CMAKE_BINARY_DIR}/third_p
 # Vendored miniaudio (M6b): playback, single header. Needs pthread + m + dl on Linux.
 add_subdirectory(${CMAKE_SOURCE_DIR}/third_party/miniaudio ${CMAKE_BINARY_DIR}/third_party/miniaudio)
 
+# Box2D (P1 Step 2): static lib. Compiled against ArcEngine's overrides in
+# engine/include/box2d/Config.h (BOX2D_USER_CONFIG) so lib + consumers agree
+# on float precision and the W4 solver — see third_party/box2d/CMakeLists.txt.
+add_subdirectory(${CMAKE_SOURCE_DIR}/third_party/box2d ${CMAKE_BINARY_DIR}/third_party/box2d)
+
 # ImGui (M7 editor): OpenGL3 backend over our existing GLFW/GLAD context.
 # Vendored copy tracks v1.92.9 (third_party/imgui/imgui-1.92.9).
 # No CMake +config shipped (vendored copy is source-only), so list sources
@@ -62,7 +70,7 @@ target_include_directories(ArcEngine PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/imgui/imgui-1.92.9
   ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/imgui/imgui-1.92.9/backends
 )
-target_link_libraries(ArcEngine PUBLIC ${GLFW_LIBRARIES} OpenGL::GL glad stb miniaudio glm::glm yaml-cpp pthread m dl)
+target_link_libraries(ArcEngine PUBLIC ${GLFW_LIBRARIES} OpenGL::GL glad stb miniaudio glm::glm yaml-cpp box2d pthread m dl)
 target_compile_options(ArcEngine PUBLIC ${GLFW_CFLAGS_OTHER})
 
 set_target_properties(ArcEngine PROPERTIES
