@@ -61,3 +61,11 @@ set_target_properties(test_physics_events PROPERTIES
   CXX_STANDARD_REQUIRED ON
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
 )
+
+add_executable(test_physics_joints test_physics_joints.cpp)
+target_link_libraries(test_physics_joints PRIVATE ArcEngine)
+set_target_properties(test_physics_joints PROPERTIES
+  CXX_STANDARD 17
+  CXX_STANDARD_REQUIRED ON
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
+)

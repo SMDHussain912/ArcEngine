@@ -56,6 +56,18 @@ public:
     int AddShape(Scene& scene, Entity e, const SubShape2D& shape);
     bool RemoveShape(Scene& scene, Entity e, size_t index);
 
+    // Joints (P1 Step 10): build the b2 joint described by e's
+    // Joint2DComponent. Requires the world created and BOTH bodies already
+    // added (target resolved via TargetId, else by TargetName lookup in the
+    // scene). The target must be another entity — this Box2D build cannot
+    // attach a joint side to the world (use a static anchor entity). Returns
+    // true if the joint exists afterwards (idempotent); false when anything
+    // is missing (component/body/target/creation failure).
+    bool CreateJoint(Scene& scene, Entity e);
+    // Destroy e's joint (false when none). RemoveBody first destroys any
+    // joint referencing the entity on EITHER side, so ids never go stale.
+    bool RemoveJoint(Entity e);
+
     // Advance the simulation by wall-clock dt (internally sub-stepped at 1/60)
     // and sync dynamic/kinematic body poses back into TransformComponents.
     void Step(Scene& scene, float dt);

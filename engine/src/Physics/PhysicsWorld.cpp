@@ -41,6 +41,14 @@ struct PhysicsWorld::Impl {
     // BoxCollider2DComponent::SubShapes; null ids keep alignment when a
     // degenerate sub-shape was skipped.
     std::unordered_map<uint32_t, std::vector<b2ShapeId>> subShapeIds;
+    // Joint registry (P1 Step 10): owner entity -> joint. Target/owner ids
+    // let RemoveBody destroy joints referencing the entity on EITHER side.
+    struct JointEntry {
+        b2JointId id;
+        uint32_t owner;
+        uint32_t target;
+    };
+    std::unordered_map<uint32_t, JointEntry> joints;
     std::vector<RawEvent> events;
 
 
@@ -75,6 +83,7 @@ void PhysicsWorld::Destroy() {
         m_impl->world = {};
         m_impl->bodies.clear();
         m_impl->subShapeIds.clear();
+        m_impl->joints.clear();
         m_impl->events.clear();
         m_impl->accumulator = 0.0f;
         m_impl->created = false;
@@ -345,6 +354,16 @@ bool PhysicsWorld::RemoveBody(Entity e) {
     if (!e.Valid()) return false;
     auto it = m_impl->bodies.find(e.Id());
     if (it == m_impl->bodies.end()) return false;
+    // Destroy joints touching this entity FIRST (either side) while their
+    // ids are still valid — no stale b2 joint may outlive a body.
+    for (auto jit = m_impl->joints.begin(); jit != m_impl->joints.end();) {
+        if (jit->second.owner == e.Id() || jit->second.target == e.Id()) {
+            b2DestroyJoint(jit->second.id);
+            jit = m_impl->joints.erase(jit);
+        } else {
+            ++jit;
+        }
+    }
     b2DestroyBody(it->second);
     m_impl->bodies.erase(it);
     m_impl->subShapeIds.erase(e.Id()); // ids die with the body
@@ -401,6 +420,142 @@ bool PhysicsWorld::RemoveShape(Scene& scene, Entity e, size_t index) {
             b2Body_SetAwake(bodyIt->second, true); // must re-settle
     }
     col.SubShapes.erase(col.SubShapes.begin() + static_cast<long>(index));
+    return true;
+}
+
+bool PhysicsWorld::CreateJoint(Scene& scene, Entity e) {
+    if (!m_impl->created || !e.Valid()) return false;
+    if (!scene.HasComponent<Joint2DComponent>(e.Id())) return false;
+    if (m_impl->joints.count(e.Id())) return true; // idempotent (Play rebuilds)
+
+    auto& j = scene.GetComponent<Joint2DComponent>(e.Id());
+    auto aIt = m_impl->bodies.find(e.Id());
+    if (aIt == m_impl->bodies.end()) return false; // AddBody first
+
+    // Resolve the target body: cached id (if its body still exists), else by
+    // entity name — names are stable across save/load, ids are not.
+    uint32_t targetId = 0;
+    if (j.TargetId != 0 && m_impl->bodies.count(j.TargetId))
+        targetId = j.TargetId;
+    else if (!j.TargetName.empty()) {
+        for (Entity cand : scene.Entities())
+            if (cand.Name() == j.TargetName) {
+                targetId = cand.Id();
+                break;
+            }
+    }
+    if (targetId == 0 || targetId == e.Id()) {
+        Arc::Log::Error("PhysicsWorld: joint on entity " + std::to_string(e.Id()) +
+                        " has no target body ('" + j.TargetName + "')");
+        return false;
+    }
+    auto bIt = m_impl->bodies.find(targetId);
+    if (bIt == m_impl->bodies.end()) {
+        Arc::Log::Error("PhysicsWorld: joint target '" + j.TargetName +
+                        "' has no body (AddBody it first)");
+        return false;
+    }
+    j.TargetId = targetId;
+
+    b2BodyId bodyA = aIt->second, bodyB = bIt->second;
+    b2JointId joint{};
+    switch (j.Type) {
+        case Joint2DComponent::Kind::Revolute: {
+            b2RevoluteJointDef d = b2DefaultRevoluteJointDef();
+            d.base.bodyIdA = bodyA;
+            d.base.bodyIdB = bodyB;
+            d.base.localFrameA.p = {j.AnchorA.x, j.AnchorA.y};
+            d.base.localFrameB.p = {j.AnchorB.x, j.AnchorB.y};
+            d.enableLimit = j.EnableLimit;
+            d.lowerAngle = j.LowerAngle;
+            d.upperAngle = j.UpperAngle;
+            d.enableMotor = j.EnableMotor;
+            d.motorSpeed = j.MotorSpeed;
+            d.maxMotorTorque = j.MaxMotorForce;
+            joint = b2CreateRevoluteJoint(m_impl->world, &d);
+            break;
+        }
+        case Joint2DComponent::Kind::Distance: {
+            b2DistanceJointDef d = b2DefaultDistanceJointDef();
+            d.base.bodyIdA = bodyA;
+            d.base.bodyIdB = bodyB;
+            d.base.localFrameA.p = {j.AnchorA.x, j.AnchorA.y};
+            d.base.localFrameB.p = {j.AnchorB.x, j.AnchorB.y};
+            float length = j.Length;
+            if (length < 0.0f) {
+                // Auto: measure the current world anchor distance.
+                b2Vec2 wa =
+                    b2Body_GetWorldPoint(bodyA, {j.AnchorA.x, j.AnchorA.y});
+                b2Vec2 wb =
+                    b2Body_GetWorldPoint(bodyB, {j.AnchorB.x, j.AnchorB.y});
+                length = std::sqrt((wb.x - wa.x) * (wb.x - wa.x) +
+                                   (wb.y - wa.y) * (wb.y - wa.y));
+            }
+            d.length = length;
+            d.enableLimit = j.EnableLengthLimit;
+            d.minLength = j.MinLength;
+            d.maxLength = j.MaxLength;
+            d.enableSpring = j.UseSpring;
+            d.hertz = j.Hertz;
+            d.dampingRatio = j.DampingRatio;
+            if (j.EnableLengthLimit && !j.UseSpring)
+                Arc::Log::Warn("PhysicsWorld: distance length limits need "
+                               "UseSpring (rigid mode overrides them)");
+            joint = b2CreateDistanceJoint(m_impl->world, &d);
+            break;
+        }
+        case Joint2DComponent::Kind::Prismatic: {
+            // World-space axis mapped onto BOTH local frames so the joint
+            // starts at rest (frames share one world direction).
+            float worldAng = std::atan2(j.Axis.y, j.Axis.x);
+            float rotA = b2Rot_GetAngle(b2Body_GetRotation(bodyA));
+            float rotB = b2Rot_GetAngle(b2Body_GetRotation(bodyB));
+            b2PrismaticJointDef d = b2DefaultPrismaticJointDef();
+            d.base.bodyIdA = bodyA;
+            d.base.bodyIdB = bodyB;
+            d.base.localFrameA = {{j.AnchorA.x, j.AnchorA.y},
+                                  b2MakeRot(worldAng - rotA)};
+            d.base.localFrameB = {{j.AnchorB.x, j.AnchorB.y},
+                                  b2MakeRot(worldAng - rotB)};
+            d.enableLimit = j.EnableLimit;
+            d.lowerTranslation = j.LowerTranslation;
+            d.upperTranslation = j.UpperTranslation;
+            d.enableMotor = j.EnableMotor;
+            d.motorSpeed = j.MotorSpeed;
+            d.maxMotorForce = j.MaxMotorForce;
+            joint = b2CreatePrismaticJoint(m_impl->world, &d);
+            break;
+        }
+        case Joint2DComponent::Kind::Weld: {
+            // Rest = CURRENT relative pose: frame rotations track each body's
+            // current angle, so nothing snaps on creation (Weld lite: Box2D
+            // default stiffness).
+            float rotA = b2Rot_GetAngle(b2Body_GetRotation(bodyA));
+            float rotB = b2Rot_GetAngle(b2Body_GetRotation(bodyB));
+            b2WeldJointDef d = b2DefaultWeldJointDef();
+            d.base.bodyIdA = bodyA;
+            d.base.bodyIdB = bodyB;
+            d.base.localFrameA = {{j.AnchorA.x, j.AnchorA.y}, b2MakeRot(rotA)};
+            d.base.localFrameB = {{j.AnchorB.x, j.AnchorB.y}, b2MakeRot(rotB)};
+            joint = b2CreateWeldJoint(m_impl->world, &d);
+            break;
+        }
+    }
+    if (!b2Joint_IsValid(joint)) {
+        Arc::Log::Error("PhysicsWorld: joint creation failed on entity " +
+                        std::to_string(e.Id()));
+        return false;
+    }
+    m_impl->joints[e.Id()] = {joint, e.Id(), targetId};
+    return true;
+}
+
+bool PhysicsWorld::RemoveJoint(Entity e) {
+    if (!e.Valid()) return false;
+    auto it = m_impl->joints.find(e.Id());
+    if (it == m_impl->joints.end()) return false;
+    b2DestroyJoint(it->second.id);
+    m_impl->joints.erase(it);
     return true;
 }
 

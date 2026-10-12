@@ -132,6 +132,46 @@ struct BoxCollider2DComponent {
     std::vector<SubShape2D> SubShapes;
 };
 
+// Joint2D (P1 Step 10): connects this entity's body (A) to another entity's
+// body (B). Anchors are LOCAL-space offsets on each body; for Weld the two
+// world anchors should coincide at rest. This Box2D build has NO world-attach
+// joints, so the target must be a real entity (typically a static anchor).
+// Created AFTER all bodies exist: PhysicsWorld::CreateJoint (editor Play runs
+// it from RebuildPhysicsBodies).
+struct Joint2DComponent {
+    enum class Kind { Revolute = 0, Distance = 1, Prismatic = 2, Weld = 3 };
+    Kind Type = Kind::Revolute;
+    std::string TargetName;  // target entity name (stable across save/load)
+    uint32_t TargetId = 0;   // resolved at CreateJoint (0 = unresolved)
+    Vec2 AnchorA{0.0f, 0.0f}; // local on THIS body
+    Vec2 AnchorB{0.0f, 0.0f}; // local on the TARGET body
+    // Limits + motor (shared flags; Kind decides the units — Revolute:
+    // radians / N*m torque; Prismatic: meters / N force).
+    bool EnableLimit = false;
+    float LowerAngle = 0.0f;
+    float UpperAngle = 0.0f;                    // Revolute (radians)
+    float LowerTranslation = -1.0f;
+    float UpperTranslation = 1.0f;              // Prismatic (meters)
+    bool EnableMotor = false;
+    float MotorSpeed = 0.0f;                    // rad/s (Revolute) or m/s.
+    // Box2D convention: speed = target(B) minus owner(A) angular velocity —
+    // static target + dynamic owner spins the owner at -MotorSpeed.
+    float MaxMotorForce = 0.0f;                 // N*m (Revolute) or N
+    // Distance: rest length (< 0 = measure world anchor distance at creation).
+    float Length = -1.0f;
+    bool EnableLengthLimit = false;
+    float MinLength = 0.0f;
+    float MaxLength = 1.0f;
+    // Box2D applies distance length-limits only in spring mode (the rigid
+    // joint enforces `length` and overrides limits) — hence this switch.
+    bool UseSpring = false;
+    float Hertz = 1.0f;       // spring stiffness (Distance)
+    float DampingRatio = 0.7f;
+    // Prismatic: travel axis in WORLD space (mapped onto both local frames
+    // at creation). Weld stiffness stays at Box2D defaults (Weld lite).
+    Vec2 Axis{1.0f, 0.0f};
+};
+
 // GUI widget (Godot Control / Unreal WidgetComponent-lite): drawn as an
 // overlay quad in the editor viewport; runtime input comes with UI focus work.
 struct GuiComponent {

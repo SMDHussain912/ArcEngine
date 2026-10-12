@@ -108,6 +108,15 @@ int main() {
     bump.Density = 3.0f;
     bump.Restitution = 0.9f;
     walkCol.SubShapes.push_back(bump);
+    // Revolute joint pinning the walker to the ground (P1 Step 10).
+    auto& wj = walker.AddComponent<Arc::Joint2DComponent>();
+    wj.Type = Arc::Joint2DComponent::Kind::Revolute;
+    wj.TargetName = "Ground";
+    wj.AnchorA = {0.0f, 0.5f};
+    wj.AnchorB = {8.0f, -4.5f};
+    wj.EnableMotor = true;
+    wj.MotorSpeed = 2.0f;
+    wj.MaxMotorForce = 10.0f;
 
     // A bare entity: must stay free of physics components after round-trip.
     Arc::Entity plain = sceneA.CreateEntity("Plain");
@@ -228,6 +237,18 @@ int main() {
                       "bump per-shape material round-trip");
                 CHECK(!b.IsSensor, "bump is solid");
             }
+            CHECK(e.HasComponent<Arc::Joint2DComponent>(), "joint persists");
+            const auto& lj = e.GetComponent<Arc::Joint2DComponent>();
+            CHECK(lj.Type == Arc::Joint2DComponent::Kind::Revolute,
+                  "joint kind round-trip");
+            CHECK(lj.TargetName == "Ground", "joint target name round-trip");
+            CHECK(Near(lj.AnchorA.x, 0.0f) && Near(lj.AnchorA.y, 0.5f),
+                  "joint anchorA round-trip");
+            CHECK(Near(lj.AnchorB.x, 8.0f) && Near(lj.AnchorB.y, -4.5f),
+                  "joint anchorB round-trip");
+            CHECK(lj.EnableMotor, "joint motor flag round-trip");
+            CHECK(Near(lj.MotorSpeed, 2.0f), "joint motor speed round-trip");
+            CHECK(Near(lj.MaxMotorForce, 10.0f), "joint motor force round-trip");
         }
     }
     CHECK(foundBall, "Ball entity survives save/load");

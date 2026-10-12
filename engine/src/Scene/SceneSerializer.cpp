@@ -117,6 +117,23 @@ SubShape2D::Type SubShapeTypeFromStr(const std::string& s) {
     return SubShape2D::Type::Box;
 }
 
+// Joint2D kind names (P1 Step 10).
+std::string JointKindToStr(Joint2DComponent::Kind k) {
+    switch (k) {
+        case Joint2DComponent::Kind::Distance: return "distance";
+        case Joint2DComponent::Kind::Prismatic: return "prismatic";
+        case Joint2DComponent::Kind::Weld: return "weld";
+        default: return "revolute";
+    }
+}
+
+Joint2DComponent::Kind JointKindFromStr(const std::string& s) {
+    if (s == "distance") return Joint2DComponent::Kind::Distance;
+    if (s == "prismatic") return Joint2DComponent::Kind::Prismatic;
+    if (s == "weld") return Joint2DComponent::Kind::Weld;
+    return Joint2DComponent::Kind::Revolute;
+}
+
 } // namespace
 
 bool SceneSerializer::Save(Scene& scene, const std::string& path) {
@@ -240,6 +257,31 @@ bool SceneSerializer::Save(Scene& scene, const std::string& path) {
             ccn["restitution"] = col.Restitution;
             ccn["is_sensor"] = col.IsSensor;
             ent["boxcollider2d"] = ccn;
+        }
+        if (e.HasComponent<Joint2DComponent>()) {
+            const auto& j = e.GetComponent<Joint2DComponent>();
+            YAML::Node jn;
+            jn["type"] = JointKindToStr(j.Type);
+            jn["target"] = j.TargetName; // by name: ids are not stable
+            jn["anchor_a"] = Vec2Node(j.AnchorA);
+            jn["anchor_b"] = Vec2Node(j.AnchorB);
+            jn["enable_limit"] = j.EnableLimit;
+            jn["lower_angle"] = j.LowerAngle;
+            jn["upper_angle"] = j.UpperAngle;
+            jn["lower_translation"] = j.LowerTranslation;
+            jn["upper_translation"] = j.UpperTranslation;
+            jn["enable_motor"] = j.EnableMotor;
+            jn["motor_speed"] = j.MotorSpeed;
+            jn["max_motor_force"] = j.MaxMotorForce;
+            jn["length"] = j.Length;
+            jn["enable_length_limit"] = j.EnableLengthLimit;
+            jn["min_length"] = j.MinLength;
+            jn["max_length"] = j.MaxLength;
+            jn["use_spring"] = j.UseSpring;
+            jn["hertz"] = j.Hertz;
+            jn["damping"] = j.DampingRatio;
+            jn["axis"] = Vec2Node(j.Axis);
+            ent["joint2d"] = jn;
         }
         entities.push_back(ent);
         count++;
@@ -445,6 +487,50 @@ bool SceneSerializer::Load(const std::string& path, Scene& outScene) {
                 col.Restitution = ccn["restitution"] ? ccn["restitution"].as<float>(0.0f) : 0.0f;
                 col.IsSensor = ccn["is_sensor"] ? ccn["is_sensor"].as<bool>(false) : false;
                 e.AddComponent<BoxCollider2DComponent>() = col;
+            }
+            if (ent["joint2d"]) {
+                const auto& jn = ent["joint2d"];
+                Joint2DComponent j;
+                j.Type = JointKindFromStr(
+                    jn["type"] ? jn["type"].as<std::string>("revolute") : "revolute");
+                j.TargetName =
+                    jn["target"] ? jn["target"].as<std::string>("") : "";
+                j.AnchorA = NodeVec2(jn["anchor_a"], j.AnchorA);
+                j.AnchorB = NodeVec2(jn["anchor_b"], j.AnchorB);
+                j.EnableLimit =
+                    jn["enable_limit"] ? jn["enable_limit"].as<bool>(false) : false;
+                j.LowerAngle =
+                    jn["lower_angle"] ? jn["lower_angle"].as<float>(0.0f) : 0.0f;
+                j.UpperAngle =
+                    jn["upper_angle"] ? jn["upper_angle"].as<float>(0.0f) : 0.0f;
+                j.LowerTranslation = jn["lower_translation"]
+                                         ? jn["lower_translation"].as<float>(-1.0f)
+                                         : -1.0f;
+                j.UpperTranslation = jn["upper_translation"]
+                                         ? jn["upper_translation"].as<float>(1.0f)
+                                         : 1.0f;
+                j.EnableMotor =
+                    jn["enable_motor"] ? jn["enable_motor"].as<bool>(false) : false;
+                j.MotorSpeed =
+                    jn["motor_speed"] ? jn["motor_speed"].as<float>(0.0f) : 0.0f;
+                j.MaxMotorForce = jn["max_motor_force"]
+                                      ? jn["max_motor_force"].as<float>(0.0f)
+                                      : 0.0f;
+                j.Length = jn["length"] ? jn["length"].as<float>(-1.0f) : -1.0f;
+                j.EnableLengthLimit = jn["enable_length_limit"]
+                                          ? jn["enable_length_limit"].as<bool>(false)
+                                          : false;
+                j.MinLength =
+                    jn["min_length"] ? jn["min_length"].as<float>(0.0f) : 0.0f;
+                j.MaxLength =
+                    jn["max_length"] ? jn["max_length"].as<float>(1.0f) : 1.0f;
+                j.UseSpring =
+                    jn["use_spring"] ? jn["use_spring"].as<bool>(false) : false;
+                j.Hertz = jn["hertz"] ? jn["hertz"].as<float>(1.0f) : 1.0f;
+                j.DampingRatio =
+                    jn["damping"] ? jn["damping"].as<float>(0.7f) : 0.7f;
+                j.Axis = NodeVec2(jn["axis"], j.Axis);
+                e.AddComponent<Joint2DComponent>() = j;
             }
             count++;
         }

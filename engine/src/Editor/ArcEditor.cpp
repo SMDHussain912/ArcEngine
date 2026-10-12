@@ -243,6 +243,8 @@ bool ArcEditor::LoadScene(const std::string& path) {
             n.AddComponent<RigidBody2DComponent>() = e.GetComponent<RigidBody2DComponent>();
         if (e.HasComponent<BoxCollider2DComponent>())
             n.AddComponent<BoxCollider2DComponent>() = e.GetComponent<BoxCollider2DComponent>();
+        if (e.HasComponent<Joint2DComponent>())
+            n.AddComponent<Joint2DComponent>() = e.GetComponent<Joint2DComponent>();
     }
     m_scene->SetFocusEntity(Entity());
     // Physics bodies (if simulating) must be rebuilt for the freshly loaded set.
@@ -265,6 +267,9 @@ void ArcEditor::RebuildPhysicsBodies() {
     m_physics.Create();
     for (Entity e : m_scene->Entities())
         if (e.HasComponent<RigidBody2DComponent>()) m_physics.AddBody(*m_scene, e);
+    // Joints need BOTH bodies present, so they come in a second pass.
+    for (Entity e : m_scene->Entities())
+        if (e.HasComponent<Joint2DComponent>()) m_physics.CreateJoint(*m_scene, e);
 }
 
 void ArcEditor::AddLog(const std::string& msg) {
@@ -367,6 +372,8 @@ Entity ArcEditor::DuplicateEntity(Entity src) {
         dst.AddComponent<RigidBody2DComponent>() = src.GetComponent<RigidBody2DComponent>();
     if (src.HasComponent<BoxCollider2DComponent>())
         dst.AddComponent<BoxCollider2DComponent>() = src.GetComponent<BoxCollider2DComponent>();
+    if (src.HasComponent<Joint2DComponent>())
+        dst.AddComponent<Joint2DComponent>() = src.GetComponent<Joint2DComponent>();
     m_scene->SetFocusEntity(dst);
     m_dirty = true;
     AddLog("Duplicated '" + src.Name() + "' as '" + dst.Name() + "'");
@@ -594,6 +601,41 @@ void ArcEditor::RenderSceneToFBO(int w, int h) {
         // P1 Step 2/Steps 5-8: physics collider outline. Chain when >= 2
         // points, polygon when VertexCount >= 3, capsule when Height > 0,
         // circle when Radius > 0, box otherwise — same selection AddBody uses.
+        // P1 Step 10: joint link (violet). Drawn under the same colliders
+        // toggle: owner anchor -> target anchor (unrotated approximation,
+        // like every other gizmo here).
+        if (m_showColliders && e.HasComponent<Joint2DComponent>()) {
+            const auto& j = e.GetComponent<Joint2DComponent>();
+            float ax = t.Position.x + j.AnchorA.x, ay = t.Position.y + j.AnchorA.y;
+            float bx = ax, by = ay;
+            if (!j.TargetName.empty()) {
+                for (Entity cand : m_scene->Entities()) {
+                    if (cand.Name() == j.TargetName) {
+                        const auto& tt = cand.GetComponent<TransformComponent>();
+                        bx = tt.Position.x + j.AnchorB.x;
+                        by = tt.Position.y + j.AnchorB.y;
+                        break;
+                    }
+                }
+            }
+            float link[4] = {ax, ay, bx, by};
+            GLuint lv = 0, la = 0;
+            glGenVertexArrays(1, &la);
+            glGenBuffers(1, &lv);
+            glBindVertexArray(la);
+            glBindBuffer(GL_ARRAY_BUFFER, lv);
+            glBufferData(GL_ARRAY_BUFFER, sizeof(link), link, GL_STREAM_DRAW);
+            glEnableVertexAttribArray(0);
+            glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, reinterpret_cast<void*>(0));
+            m_flatShader->Bind();
+            m_flatShader->SetMat4("u_ViewProj", &vp[0][0]);
+            m_flatShader->SetVec3("u_Color", 0.75f, 0.45f, 1.0f);
+            glDrawArrays(GL_LINES, 0, 2);
+            glBindVertexArray(0);
+            glDeleteBuffers(1, &lv);
+            glDeleteVertexArrays(1, &la);
+            m_sceneShader->Bind();
+        }
         if (m_showColliders && e.HasComponent<BoxCollider2DComponent>()) {
             const auto& col = e.GetComponent<BoxCollider2DComponent>();
             std::vector<float> verts;
@@ -1333,6 +1375,11 @@ void ArcEditor::HierarchyWindow() {
                 m_dirty = true;
                 AddLog("Added BoxCollider2D to '" + e.Name() + "'");
             }
+            if (ImGui::MenuItem("Add Joint2D") && !e.HasComponent<Joint2DComponent>()) {
+                e.AddComponent<Joint2DComponent>();
+                m_dirty = true;
+                AddLog("Added Joint2D to '" + e.Name() + "'");
+            }
             if (ImGui::MenuItem("Delete")) {
                 AddLog("Deleted '" + e.Name() + "'");
                 m_scene->DestroyEntity(e);
@@ -1741,6 +1788,91 @@ void ArcEditor::InspectorWindow() {
             sel.AddComponent<BoxCollider2DComponent>();
             m_dirty = true;
             AddLog("Added BoxCollider2D to '" + sel.Name() + "'");
+        }
+    }
+    if (sel.HasComponent<Joint2DComponent>()) {
+        if (ImGui::TreeNodeEx("Joint2D", ImGuiTreeNodeFlags_DefaultOpen)) {
+            auto& j = sel.GetComponent<Joint2DComponent>();
+            const char* kinds[] = {"Revolute", "Distance", "Prismatic", "Weld"};
+            int k = static_cast<int>(j.Type);
+            if (ImGui::Combo("Type", &k, kinds, 4)) {
+                j.Type = static_cast<Joint2DComponent::Kind>(k);
+                m_dirty = true;
+            }
+            char tbuf[64];
+            std::snprintf(tbuf, sizeof(tbuf), "%s", j.TargetName.c_str());
+            if (ImGui::InputText("Target (entity name)", tbuf, sizeof(tbuf))) {
+                j.TargetName = tbuf;
+                m_dirty = true;
+            }
+            if (ImGui::DragFloat2("AnchorA (local)", &j.AnchorA.x, 0.01f, -100.0f,
+                                  100.0f, "%.2f"))
+                m_dirty = true;
+            if (ImGui::DragFloat2("AnchorB (local)", &j.AnchorB.x, 0.01f, -100.0f,
+                                  100.0f, "%.2f"))
+                m_dirty = true;
+            if (j.Type == Joint2DComponent::Kind::Prismatic) {
+                if (ImGui::DragFloat2("Axis (world)", &j.Axis.x, 0.01f, -1.0f,
+                                      1.0f, "%.3f"))
+                    m_dirty = true;
+            }
+            if (j.Type == Joint2DComponent::Kind::Distance) {
+                if (ImGui::DragFloat("Length (-1=auto)", &j.Length, 0.01f, -1.0f,
+                                     100.0f, "%.2f"))
+                    m_dirty = true;
+                if (ImGui::Checkbox("Use spring", &j.UseSpring)) m_dirty = true;
+                if (ImGui::Checkbox("Length limit", &j.EnableLengthLimit))
+                    m_dirty = true;
+                if (ImGui::DragFloat("Min length", &j.MinLength, 0.01f, 0.0f,
+                                     100.0f, "%.2f"))
+                    m_dirty = true;
+                if (ImGui::DragFloat("Max length", &j.MaxLength, 0.01f, 0.0f,
+                                     100.0f, "%.2f"))
+                    m_dirty = true;
+                if (ImGui::DragFloat("Hertz", &j.Hertz, 0.05f, 0.0f, 20.0f, "%.2f"))
+                    m_dirty = true;
+                if (ImGui::DragFloat("Damping", &j.DampingRatio, 0.01f, 0.0f,
+                                     2.0f, "%.2f"))
+                    m_dirty = true;
+            }
+            if (j.Type == Joint2DComponent::Kind::Revolute ||
+                j.Type == Joint2DComponent::Kind::Prismatic) {
+                if (ImGui::Checkbox("Enable limit", &j.EnableLimit)) m_dirty = true;
+                if (j.Type == Joint2DComponent::Kind::Revolute) {
+                    if (ImGui::DragFloat("Lower angle (rad)", &j.LowerAngle, 0.01f,
+                                         -3.1f, 3.1f, "%.2f"))
+                        m_dirty = true;
+                    if (ImGui::DragFloat("Upper angle (rad)", &j.UpperAngle, 0.01f,
+                                         -3.1f, 3.1f, "%.2f"))
+                        m_dirty = true;
+                } else {
+                    if (ImGui::DragFloat("Lower translation", &j.LowerTranslation,
+                                         0.01f, -100.0f, 100.0f, "%.2f"))
+                        m_dirty = true;
+                    if (ImGui::DragFloat("Upper translation", &j.UpperTranslation,
+                                         0.01f, -100.0f, 100.0f, "%.2f"))
+                        m_dirty = true;
+                }
+                if (ImGui::Checkbox("Enable motor", &j.EnableMotor)) m_dirty = true;
+                if (ImGui::DragFloat("Motor speed", &j.MotorSpeed, 0.01f, -20.0f,
+                                     20.0f, "%.2f"))
+                    m_dirty = true;
+                if (ImGui::DragFloat("Max motor force", &j.MaxMotorForce, 0.1f, 0.0f,
+                                     10000.0f, "%.1f"))
+                    m_dirty = true;
+            }
+            if (ImGui::Button("Remove Joint2D")) {
+                sel.RemoveComponent<Joint2DComponent>();
+                m_dirty = true;
+                AddLog("Removed Joint2D from '" + sel.Name() + "'");
+            }
+            ImGui::TreePop();
+        }
+    } else {
+        if (ImGui::Button("Add Joint2D")) {
+            sel.AddComponent<Joint2DComponent>();
+            m_dirty = true;
+            AddLog("Added Joint2D to '" + sel.Name() + "'");
         }
     }
     if (sel.HasComponent<CameraComponent>()) {
