@@ -80,6 +80,24 @@ struct RigidBody2DComponent {
     int GroupIndex = 0;
 };
 
+// Extra shape on a compound body (P1 Step 9): positioned in body-local
+// space, with its OWN Density/Friction/Restitution and IsSensor. Used via
+// BoxCollider2DComponent::SubShapes (serialized) or PhysicsWorld::AddShape
+// (runtime). Box/Circle/Capsule only — polygon/chain sub-shapes are out of
+// scope for Step 9.
+struct SubShape2D {
+    enum class Type { Box = 0, Circle = 1, Capsule = 2 };
+    Type Shape = Type::Box;
+    Vec2 Offset{0.0f, 0.0f}; // body-local center
+    Vec2 Size{0.5f, 0.5f};   // Box: full extents (SpriteComponent convention)
+    float Radius = 0.25f;    // Circle radius / Capsule end-cap radius
+    float Height = 0.0f;     // Capsule segment length
+    float Density = 1.0f;
+    float Friction = 0.3f;
+    float Restitution = 0.0f;
+    bool IsSensor = false;
+};
+
 // BoxCollider2D (P1 Step 2): box collision shape for the parent body. Size is
 // the FULL width/height in world units (like SpriteComponent.Size); the physics
 // wrapper converts it to Box2D half-extents. No collider = body with no shape.
@@ -108,6 +126,10 @@ struct BoxCollider2DComponent {
     float Friction = 0.3f;     // Coulomb friction [0,1]
     float Restitution = 0.0f;  // bounciness [0,1]
     bool IsSensor = false;     // overlaps reported, no physical response
+    // Compound extras (P1 Step 9): the fields above are the PRIMARY shape;
+    // each sub-shape has its own material + sensor flag (Box2D sums all
+    // shape densities for the combined mass).
+    std::vector<SubShape2D> SubShapes;
 };
 
 // GUI widget (Godot Control / Unreal WidgetComponent-lite): drawn as an

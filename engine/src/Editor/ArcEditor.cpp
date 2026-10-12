@@ -687,6 +687,73 @@ void ArcEditor::RenderSceneToFBO(int w, int h) {
             glBindVertexArray(0);
             glDeleteBuffers(1, &cv);
             glDeleteVertexArrays(1, &ca);
+            // Compound sub-shape outlines (P1 Step 9): same colors as the
+            // primary — box corners / circle ring / capsule at their offsets.
+            for (const auto& ss : col.SubShapes) {
+                std::vector<float> sv;
+                bool sStrip = false;
+                float cx = t.Position.x + ss.Offset.x;
+                float cy = t.Position.y + ss.Offset.y;
+                if (ss.Shape == SubShape2D::Type::Circle) {
+                    const int segs = 32;
+                    sStrip = true;
+                    sv.reserve(static_cast<size_t>(segs + 1) * 2);
+                    for (int i = 0; i <= segs; ++i) {
+                        float a = 2.0f * 3.14159265f * static_cast<float>(i) / segs;
+                        sv.push_back(cx + std::cos(a) * ss.Radius);
+                        sv.push_back(cy + std::sin(a) * ss.Radius);
+                    }
+                } else if (ss.Shape == SubShape2D::Type::Capsule) {
+                    const int capSegs = 24;
+                    sStrip = true;
+                    float r = ss.Radius, half = ss.Height * 0.5f;
+                    float x1 = cx + r, x0 = cx - r, yb = cy - half, yt = cy + half;
+                    sv = {x1, yb, x1, yt};
+                    for (int i = 1; i < capSegs; ++i) {
+                        float a = 3.14159265f * static_cast<float>(i) / capSegs;
+                        sv.push_back(cx + std::cos(a) * r);
+                        sv.push_back(yt + std::sin(a) * r);
+                    }
+                    sv.push_back(x0);
+                    sv.push_back(yt);
+                    sv.push_back(x0);
+                    sv.push_back(yb);
+                    for (int i = 1; i < capSegs; ++i) {
+                        float a = 3.14159265f * (1.0f + static_cast<float>(i) / capSegs);
+                        sv.push_back(cx + std::cos(a) * r);
+                        sv.push_back(yb + std::sin(a) * r);
+                    }
+                    sv.push_back(x1);
+                    sv.push_back(yb);
+                } else {
+                    float hx = ss.Size.x * 0.5f, hy = ss.Size.y * 0.5f;
+                    sv = {cx - hx, cy - hy, cx + hx, cy - hy,
+                          cx + hx, cy + hy, cx - hx, cy + hy};
+                }
+                GLuint svId = 0, svao = 0;
+                glGenVertexArrays(1, &svao);
+                glGenBuffers(1, &svId);
+                glBindVertexArray(svao);
+                glBindBuffer(GL_ARRAY_BUFFER, svId);
+                glBufferData(GL_ARRAY_BUFFER, sv.size() * sizeof(float), sv.data(),
+                             GL_STREAM_DRAW);
+                glEnableVertexAttribArray(0);
+                glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0,
+                                      reinterpret_cast<void*>(0));
+                m_flatShader->Bind();
+                m_flatShader->SetMat4("u_ViewProj", &vp[0][0]);
+                if (ss.IsSensor)
+                    m_flatShader->SetVec3("u_Color", 0.95f, 0.85f, 0.35f); // sensor = amber
+                else
+                    m_flatShader->SetVec3("u_Color", 0.65f, 0.85f, 0.55f);
+                if (sStrip)
+                    glDrawArrays(GL_LINE_STRIP, 0, static_cast<int>(sv.size() / 2));
+                else
+                    glDrawArrays(GL_LINE_LOOP, 0, static_cast<int>(sv.size() / 2));
+                glBindVertexArray(0);
+                glDeleteBuffers(1, &svId);
+                glDeleteVertexArrays(1, &svao);
+            }
             m_sceneShader->Bind();
         }
         // Light radius ring.
@@ -1571,6 +1638,74 @@ void ArcEditor::InspectorWindow() {
             }
             if (ImGui::Checkbox("Chain loop", &col.ChainLoop)) m_dirty = true;
             if (ImGui::Checkbox("Chain flip winding", &col.ChainFlip)) m_dirty = true;
+            // Compound sub-shapes (P1 Step 9): per-shape material + sensor.
+            if (!col.SubShapes.empty()) {
+                ImGui::Separator();
+                ImGui::Text("Sub-shapes (%d)",
+                            static_cast<int>(col.SubShapes.size()));
+            }
+            for (int si = 0; si < static_cast<int>(col.SubShapes.size()); ++si) {
+                auto& ss = col.SubShapes[static_cast<size_t>(si)];
+                ImGui::PushID(2000 + si);
+                const char* types[] = {"Box", "Circle", "Capsule"};
+                int t = static_cast<int>(ss.Shape);
+                if (ImGui::Combo("Type", &t, types, 3)) {
+                    ss.Shape = static_cast<SubShape2D::Type>(t);
+                    m_dirty = true;
+                }
+                if (ImGui::DragFloat2("Offset", &ss.Offset.x, 0.01f, -100.0f,
+                                      100.0f, "%.2f"))
+                    m_dirty = true;
+                if (ss.Shape == SubShape2D::Type::Box) {
+                    if (ImGui::DragFloat2("Size##s", &ss.Size.x, 0.01f, 0.01f,
+                                          100.0f, "%.2f"))
+                        m_dirty = true;
+                } else {
+                    if (ImGui::DragFloat("Radius##s", &ss.Radius, 0.01f, 0.0f,
+                                         100.0f, "%.2f"))
+                        m_dirty = true;
+                    if (ss.Shape == SubShape2D::Type::Capsule &&
+                        ImGui::DragFloat("Height##s", &ss.Height, 0.01f, 0.0f,
+                                         100.0f, "%.2f"))
+                        m_dirty = true;
+                }
+                if (ImGui::DragFloat("Density##s", &ss.Density, 0.01f, 0.0f,
+                                     100.0f, "%.2f"))
+                    m_dirty = true;
+                if (ImGui::DragFloat("Friction##s", &ss.Friction, 0.005f, 0.0f,
+                                     1.0f, "%.3f"))
+                    m_dirty = true;
+                if (ImGui::DragFloat("Restitution##s", &ss.Restitution, 0.01f, 0.0f,
+                                     1.0f, "%.2f"))
+                    m_dirty = true;
+                if (ImGui::Checkbox("Sensor##s", &ss.IsSensor)) m_dirty = true;
+                if (ImGui::Button("Remove")) {
+                    col.SubShapes.erase(col.SubShapes.begin() + si);
+                    m_dirty = true;
+                    ImGui::PopID();
+                    break;
+                }
+                ImGui::PopID();
+            }
+            if (ImGui::Button("Add box")) {
+                col.SubShapes.push_back(SubShape2D{});
+                m_dirty = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Add circle")) {
+                SubShape2D s;
+                s.Shape = SubShape2D::Type::Circle;
+                col.SubShapes.push_back(s);
+                m_dirty = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Add capsule")) {
+                SubShape2D s;
+                s.Shape = SubShape2D::Type::Capsule;
+                s.Height = 0.5f;
+                col.SubShapes.push_back(s);
+                m_dirty = true;
+            }
             // Polygon (P1 Step 7): >= 3 local-space vertices select the polygon
             // shape (hull-validated at Play; degenerate falls back to box).
             if (ImGui::InputInt("Poly verts (0=box)", &col.VertexCount)) {

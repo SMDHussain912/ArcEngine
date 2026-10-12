@@ -104,6 +104,19 @@ RigidBodyType RigidBodyTypeFromStr(const std::string& s) {
     return RigidBodyType::Dynamic;
 }
 
+// Compound sub-shape type names (P1 Step 9).
+std::string SubShapeTypeToStr(SubShape2D::Type t) {
+    if (t == SubShape2D::Type::Circle) return "circle";
+    if (t == SubShape2D::Type::Capsule) return "capsule";
+    return "box";
+}
+
+SubShape2D::Type SubShapeTypeFromStr(const std::string& s) {
+    if (s == "circle") return SubShape2D::Type::Circle;
+    if (s == "capsule") return SubShape2D::Type::Capsule;
+    return SubShape2D::Type::Box;
+}
+
 } // namespace
 
 bool SceneSerializer::Save(Scene& scene, const std::string& path) {
@@ -204,6 +217,23 @@ bool SceneSerializer::Save(Scene& scene, const std::string& path) {
                 ccn["chain"] = ch;
                 ccn["chain_loop"] = col.ChainLoop;
                 ccn["chain_flip"] = col.ChainFlip;
+            }
+            if (!col.SubShapes.empty()) {
+                YAML::Node subs;
+                for (const auto& ss : col.SubShapes) {
+                    YAML::Node n;
+                    n["type"] = SubShapeTypeToStr(ss.Shape);
+                    n["offset"] = Vec2Node(ss.Offset);
+                    n["size"] = Vec2Node(ss.Size);
+                    n["radius"] = ss.Radius;
+                    n["height"] = ss.Height;
+                    n["density"] = ss.Density;
+                    n["friction"] = ss.Friction;
+                    n["restitution"] = ss.Restitution;
+                    n["is_sensor"] = ss.IsSensor;
+                    subs.push_back(n);
+                }
+                ccn["subshapes"] = subs;
             }
             ccn["density"] = col.Density;
             ccn["friction"] = col.Friction;
@@ -381,6 +411,34 @@ bool SceneSerializer::Load(const std::string& path, Scene& outScene) {
                         ccn["chain_loop"] ? ccn["chain_loop"].as<bool>(false) : false;
                     col.ChainFlip =
                         ccn["chain_flip"] ? ccn["chain_flip"].as<bool>(false) : false;
+                }
+                if (ccn["subshapes"] && ccn["subshapes"].IsSequence()) {
+                    // Compound sub-shapes (P1 Step 9); cap defensively.
+                    col.SubShapes.clear();
+                    size_t n = ccn["subshapes"].size();
+                    if (n > 64) n = 64;
+                    for (size_t i = 0; i < n; ++i) {
+                        const auto& sn = ccn["subshapes"][i];
+                        SubShape2D ss;
+                        ss.Shape = SubShapeTypeFromStr(
+                            sn["type"] ? sn["type"].as<std::string>("box") : "box");
+                        ss.Offset = NodeVec2(sn["offset"], ss.Offset);
+                        ss.Size = NodeVec2(sn["size"], ss.Size);
+                        ss.Radius =
+                            sn["radius"] ? sn["radius"].as<float>(0.25f) : 0.25f;
+                        ss.Height =
+                            sn["height"] ? sn["height"].as<float>(0.0f) : 0.0f;
+                        ss.Density =
+                            sn["density"] ? sn["density"].as<float>(1.0f) : 1.0f;
+                        ss.Friction =
+                            sn["friction"] ? sn["friction"].as<float>(0.3f) : 0.3f;
+                        ss.Restitution = sn["restitution"]
+                                             ? sn["restitution"].as<float>(0.0f)
+                                             : 0.0f;
+                        ss.IsSensor =
+                            sn["is_sensor"] ? sn["is_sensor"].as<bool>(false) : false;
+                        col.SubShapes.push_back(ss);
+                    }
                 }
                 col.Density = ccn["density"] ? ccn["density"].as<float>(1.0f) : 1.0f;
                 col.Friction = ccn["friction"] ? ccn["friction"].as<float>(0.3f) : 0.3f;

@@ -334,6 +334,102 @@ int main() {
         pw.Destroy();
     }
 
+    // --- 4e. Compound bodies: sensor feet + AddShape/RemoveShape API ---
+    {
+        // Sensor-feet pattern: solid primary box rests at floor_top + 0.5.
+        // Two sensor circles hang BELOW the box bottom — they must report
+        // sensor touches WITHOUT moving the body (no physical response).
+        Arc::Scene s;
+        auto floor = s.CreateEntity("Floor");
+        floor.AddComponent<Arc::RigidBody2DComponent>().Type =
+            Arc::RigidBodyType::Static;
+        auto& fcol = floor.AddComponent<Arc::BoxCollider2DComponent>();
+        fcol.Size = {100.0f, 1.0f}; // top at y = 0.5
+
+        auto player = s.CreateEntity("Player");
+        player.GetComponent<Arc::TransformComponent>().Position = {0.0f, 3.0f, 0.0f};
+        player.AddComponent<Arc::RigidBody2DComponent>().Type =
+            Arc::RigidBodyType::Dynamic;
+        auto& pcol = player.AddComponent<Arc::BoxCollider2DComponent>();
+        pcol.Size = {1.0f, 1.0f}; // primary solid shape
+        Arc::SubShape2D footL;
+        footL.Shape = Arc::SubShape2D::Type::Circle;
+        footL.Offset = {-0.3f, -0.7f};
+        footL.Radius = 0.2f;
+        footL.IsSensor = true;
+        Arc::SubShape2D footR = footL;
+        footR.Offset = {0.3f, -0.7f};
+        pcol.SubShapes = {footL, footR};
+
+        Arc::PhysicsWorld pw;
+        pw.Create();
+        CHECK(pw.AddBody(s, floor), "floor added");
+        CHECK(pw.AddBody(s, player), "compound player added");
+        RunSeconds(pw, s, 3.0f);
+
+        float y = player.GetComponent<Arc::TransformComponent>().Position.y;
+        CHECK(y > 0.9f && y < 1.1f,
+              "sensor feet do not push the body (rests on primary box)");
+        CHECK(pw.SensorTouched(s, player, floor),
+              "sensor feet report overlap with the floor");
+        // The primary still emits a SOLID contact alongside the sensors.
+        auto evs = pw.PollCollisionEvents(s);
+        bool solidContact = false;
+        for (const auto& ev : evs) {
+            if (!ev.begun || ev.sensor) continue;
+            uint32_t a = ev.entityA.Id(), b = ev.entityB.Id();
+            if ((a == player.Id() && b == floor.Id()) ||
+                (a == floor.Id() && b == player.Id()))
+                solidContact = true;
+        }
+        CHECK(solidContact, "primary box still emits solid contact events");
+        pw.Destroy();
+    }
+    {
+        // AddShape/RemoveShape rest-height transitions: primary 0.5 box rests
+        // at 0.5 + 0.25 = 0.75; a live circle extending 0.9 below the body
+        // lifts rest to 0.5 + 0.9 = 1.4; removing it drops back to 0.75.
+        Arc::Scene s;
+        auto floor = s.CreateEntity("Floor");
+        floor.AddComponent<Arc::RigidBody2DComponent>().Type =
+            Arc::RigidBodyType::Static;
+        auto& fcol = floor.AddComponent<Arc::BoxCollider2DComponent>();
+        fcol.Size = {100.0f, 1.0f};
+
+        auto box = s.CreateEntity("Box");
+        box.GetComponent<Arc::TransformComponent>().Position = {0.0f, 3.0f, 0.0f};
+        box.AddComponent<Arc::RigidBody2DComponent>().Type =
+            Arc::RigidBodyType::Dynamic;
+        auto& bcol = box.AddComponent<Arc::BoxCollider2DComponent>();
+        bcol.Size = {0.5f, 0.5f};
+
+        Arc::PhysicsWorld pw;
+        pw.Create();
+        pw.AddBody(s, floor);
+        pw.AddBody(s, box);
+        RunSeconds(pw, s, 2.0f);
+        float y0 = box.GetComponent<Arc::TransformComponent>().Position.y;
+        CHECK(y0 > 0.65f && y0 < 0.85f, "primary-only rest height (0.75)");
+
+        Arc::SubShape2D ball;
+        ball.Shape = Arc::SubShape2D::Type::Circle;
+        ball.Offset = {0.0f, -0.4f};
+        ball.Radius = 0.5f; // lowest point = -0.9 from body center
+        CHECK(pw.AddShape(s, box, ball) == 0, "AddShape returns index 0");
+        RunSeconds(pw, s, 2.0f);
+        float y1 = box.GetComponent<Arc::TransformComponent>().Position.y;
+        CHECK(y1 > 1.25f && y1 < 1.55f,
+              "AddShape lifts body onto new circle (0.5 + 0.9 = 1.4)");
+
+        CHECK(pw.RemoveShape(s, box, 0), "RemoveShape(0) succeeds");
+        CHECK(!pw.RemoveShape(s, box, 0), "RemoveShape on empty fails");
+        RunSeconds(pw, s, 2.0f);
+        float y2 = box.GetComponent<Arc::TransformComponent>().Position.y;
+        CHECK(y2 > 0.65f && y2 < 0.85f,
+              "RemoveShape drops body back to primary rest height");
+        pw.Destroy();
+    }
+
     // --- 5. Entities without rigid bodies / post-destroy are safe no-ops ---
     {
         Arc::Scene s;

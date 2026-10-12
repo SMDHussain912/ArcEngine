@@ -1,5 +1,6 @@
 #pragma once
 #include "ArcEngine/Core/Math.h"
+#include "ArcEngine/Scene/Components.h"
 #include "ArcEngine/Scene/Entity.h"
 
 #include <cstdint>
@@ -43,6 +44,17 @@ public:
     bool AddBody(Scene& scene, Entity e);
     bool RemoveBody(Entity e);
     bool HasBody(Entity e) const;
+
+    // Compound bodies (P1 Step 9): runtime shape management. Both mutate the
+    // entity's BoxCollider2DComponent::SubShapes (the source of truth, so the
+    // change serializes) and — when the body already exists — the live Box2D
+    // body immediately (mass recomputed). AddShape appends and returns the
+    // new sub-shape index; RemoveShape destroys index `i` (false when the
+    // entity has no collider, no such index, or the world isn't created —
+    // the component edit still happens for AddShape when only the scene is
+    // populated pre-AddBody).
+    int AddShape(Scene& scene, Entity e, const SubShape2D& shape);
+    bool RemoveShape(Scene& scene, Entity e, size_t index);
 
     // Advance the simulation by wall-clock dt (internally sub-stepped at 1/60)
     // and sync dynamic/kinematic body poses back into TransformComponents.

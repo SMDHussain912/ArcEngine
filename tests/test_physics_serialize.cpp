@@ -88,6 +88,27 @@ int main() {
     terrCol.ChainLoop = true;
     terrCol.ChainFlip = true;
 
+    // Compound body (P1 Step 9): primary box + sensor foot + material bump.
+    Arc::Entity walker = sceneA.CreateEntity("Walker");
+    walker.GetComponent<Arc::TransformComponent>().Position = {8.0f, -5.0f, 0.0f};
+    walker.AddComponent<Arc::RigidBody2DComponent>().Type =
+        Arc::RigidBodyType::Dynamic;
+    auto& walkCol = walker.AddComponent<Arc::BoxCollider2DComponent>();
+    walkCol.Size = {0.6f, 1.0f};
+    Arc::SubShape2D foot;
+    foot.Shape = Arc::SubShape2D::Type::Circle;
+    foot.Offset = {0.2f, -0.6f};
+    foot.Radius = 0.15f;
+    foot.IsSensor = true;
+    walkCol.SubShapes.push_back(foot);
+    Arc::SubShape2D bump;
+    bump.Shape = Arc::SubShape2D::Type::Box;
+    bump.Offset = {-0.4f, 0.3f};
+    bump.Size = {0.2f, 0.2f};
+    bump.Density = 3.0f;
+    bump.Restitution = 0.9f;
+    walkCol.SubShapes.push_back(bump);
+
     // A bare entity: must stay free of physics components after round-trip.
     Arc::Entity plain = sceneA.CreateEntity("Plain");
 
@@ -147,9 +168,9 @@ int main() {
     }
     CHECK(foundBox, "Box entity survives save/load");
     CHECK(foundGround, "Ground entity survives save/load");
-    // Circle + capsule + polygon + chain collider round-trips (Steps 5-8).
+    // Circle + capsule + polygon + chain + compound collider round-trips (5-9).
     bool foundBall = false, foundPill = false, foundRock = false,
-         foundTerrain = false;
+         foundTerrain = false, foundWalker = false;
     for (Arc::Entity e : loaded.Entities()) {
         if (e.Name() == "Ball") {
             foundBall = true;
@@ -186,12 +207,34 @@ int main() {
                       "chain p2 round-trip");
             }
             CHECK(c.VertexCount == 0, "terrain is chain-only (no polygon)");
+        } else if (e.Name() == "Walker") {
+            foundWalker = true;
+            const auto& c = e.GetComponent<Arc::BoxCollider2DComponent>();
+            CHECK(c.SubShapes.size() == 2, "subshape count round-trip");
+            if (c.SubShapes.size() == 2) {
+                const auto& f = c.SubShapes[0];
+                CHECK(f.Shape == Arc::SubShape2D::Type::Circle,
+                      "foot type round-trip");
+                CHECK(Near(f.Offset.x, 0.2f) && Near(f.Offset.y, -0.6f),
+                      "foot offset round-trip");
+                CHECK(Near(f.Radius, 0.15f), "foot radius round-trip");
+                CHECK(f.IsSensor, "foot sensor round-trip");
+                const auto& b = c.SubShapes[1];
+                CHECK(b.Shape == Arc::SubShape2D::Type::Box, "bump type round-trip");
+                CHECK(Near(b.Offset.x, -0.4f), "bump offset round-trip");
+                CHECK(Near(b.Size.x, 0.2f) && Near(b.Size.y, 0.2f),
+                      "bump size round-trip");
+                CHECK(Near(b.Density, 3.0f) && Near(b.Restitution, 0.9f),
+                      "bump per-shape material round-trip");
+                CHECK(!b.IsSensor, "bump is solid");
+            }
         }
     }
     CHECK(foundBall, "Ball entity survives save/load");
     CHECK(foundPill, "Pill entity survives save/load");
     CHECK(foundRock, "Rock entity survives save/load");
     CHECK(foundTerrain, "Terrain entity survives save/load");
+    CHECK(foundWalker, "Walker entity survives save/load");
 
     std::remove(tmpPath);
     std::printf("test_physics_serialize: ALL OK\n");

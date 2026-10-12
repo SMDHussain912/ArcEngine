@@ -37,6 +37,10 @@ struct PhysicsWorld::Impl {
     bool created = false;
     // entity id -> Box2D body handle. One body per rigid entity.
     std::unordered_map<uint32_t, b2BodyId> bodies;
+    // entity id -> compound sub-shape ids (P1 Step 9), index-aligned with
+    // BoxCollider2DComponent::SubShapes; null ids keep alignment when a
+    // degenerate sub-shape was skipped.
+    std::unordered_map<uint32_t, std::vector<b2ShapeId>> subShapeIds;
     std::vector<RawEvent> events;
 
 
@@ -70,6 +74,7 @@ void PhysicsWorld::Destroy() {
         b2DestroyWorld(m_impl->world); // destroys all bodies it owns
         m_impl->world = {};
         m_impl->bodies.clear();
+        m_impl->subShapeIds.clear();
         m_impl->events.clear();
         m_impl->accumulator = 0.0f;
         m_impl->created = false;
@@ -122,6 +127,45 @@ static void DrainEvents(b2WorldId world, std::vector<RawEvent>& out) {
     for (int i = 0; i < se.endCount; ++i)
         push(entityOf(se.endEvents[i].sensorShapeId), entityOf(se.endEvents[i].visitorShapeId),
              false, true);
+}
+
+// Create one compound sub-shape (P1 Step 9) at a body-local offset with its
+// OWN material/sensor flag and the body's collision filter. Returns a null
+// shape id (with the caller warning) on degenerate geometry.
+static b2ShapeId CreateSubShape(b2BodyId body, const SubShape2D& ss,
+                                const RigidBody2DComponent& rb) {
+    b2ShapeDef sd = b2DefaultShapeDef();
+    sd.density = ss.Density;
+    sd.material.friction = ss.Friction;
+    sd.material.restitution = ss.Restitution;
+    sd.isSensor = ss.IsSensor;
+    sd.enableContactEvents = !ss.IsSensor;
+    sd.enableSensorEvents = true;
+    sd.filter.categoryBits = rb.Category;
+    sd.filter.maskBits = rb.Mask;
+    sd.filter.groupIndex = rb.GroupIndex;
+    switch (ss.Shape) {
+        case SubShape2D::Type::Circle: {
+            if (ss.Radius <= 0.0f) return b2ShapeId{};
+            b2Circle c = {{ss.Offset.x, ss.Offset.y}, ss.Radius};
+            return b2CreateCircleShape(body, &sd, &c);
+        }
+        case SubShape2D::Type::Capsule: {
+            if (ss.Radius <= 0.0f) return b2ShapeId{};
+            b2Capsule cap;
+            cap.center1 = {ss.Offset.x, ss.Offset.y - ss.Height * 0.5f};
+            cap.center2 = {ss.Offset.x, ss.Offset.y + ss.Height * 0.5f};
+            cap.radius = ss.Radius;
+            return b2CreateCapsuleShape(body, &sd, &cap);
+        }
+        case SubShape2D::Type::Box:
+        default: {
+            b2Polygon box = b2MakeOffsetBox(ss.Size.x * 0.5f, ss.Size.y * 0.5f,
+                                            {ss.Offset.x, ss.Offset.y},
+                                            b2MakeRot(0.0f));
+            return b2CreatePolygonShape(body, &sd, &box);
+        }
+    }
 }
 
 bool PhysicsWorld::AddBody(Scene& scene, Entity e) {
@@ -277,6 +321,22 @@ bool PhysicsWorld::AddBody(Scene& scene, Entity e) {
         }
     }
 
+    // Compound sub-shapes (P1 Step 9): one b2 shape per entry, ids kept
+    // index-aligned with the component (null id = skipped degenerate entry).
+    if (scene.HasComponent<BoxCollider2DComponent>(e.Id())) {
+        const auto& col = scene.GetComponent<BoxCollider2DComponent>(e.Id());
+        auto& ids = m_impl->subShapeIds[e.Id()];
+        ids.reserve(col.SubShapes.size());
+        for (size_t i = 0; i < col.SubShapes.size(); ++i) {
+            b2ShapeId sid = CreateSubShape(body, col.SubShapes[i], rb);
+            if (!b2Shape_IsValid(sid))
+                Arc::Log::Warn("PhysicsWorld: sub-shape " + std::to_string(i) +
+                               " on entity " + std::to_string(e.Id()) +
+                               " degenerate (radius<=0) — skipped");
+            ids.push_back(sid);
+        }
+    }
+
     m_impl->bodies[e.Id()] = body;
     return true;
 }
@@ -287,6 +347,7 @@ bool PhysicsWorld::RemoveBody(Entity e) {
     if (it == m_impl->bodies.end()) return false;
     b2DestroyBody(it->second);
     m_impl->bodies.erase(it);
+    m_impl->subShapeIds.erase(e.Id()); // ids die with the body
     // Purge queued pairs mentioning this entity: Box2D emits an end-touch on
     // destroy, which we may already have drained — either way no stale pair
     // may survive to mislead the next poll (Area2D/pickup correctness).
@@ -300,6 +361,47 @@ bool PhysicsWorld::RemoveBody(Entity e) {
 
 bool PhysicsWorld::HasBody(Entity e) const {
     return e.Valid() && m_impl->bodies.find(e.Id()) != m_impl->bodies.end();
+}
+
+int PhysicsWorld::AddShape(Scene& scene, Entity e, const SubShape2D& shape) {
+    if (!e.Valid() || !scene.HasComponent<BoxCollider2DComponent>(e.Id()))
+        return -1;
+    auto& col = scene.GetComponent<BoxCollider2DComponent>(e.Id());
+    col.SubShapes.push_back(shape);
+    const int index = static_cast<int>(col.SubShapes.size()) - 1;
+    // Live body: create the b2 shape now so the change lands this frame and
+    // the body's mass is recomputed by Box2D.
+    auto it = m_impl->bodies.find(e.Id());
+    if (m_impl->created && it != m_impl->bodies.end() &&
+        scene.HasComponent<RigidBody2DComponent>(e.Id())) {
+        const auto& rb = scene.GetComponent<RigidBody2DComponent>(e.Id());
+        b2ShapeId sid = CreateSubShape(it->second, shape, rb);
+        if (!b2Shape_IsValid(sid))
+            Arc::Log::Warn("PhysicsWorld: AddShape degenerate (radius<=0) on " +
+                           std::to_string(e.Id()) + " — kept in component only");
+        m_impl->subShapeIds[e.Id()].push_back(sid); // keep index alignment
+        b2Body_SetAwake(it->second, true); // sleeping bodies must react
+    }
+    return index;
+}
+
+bool PhysicsWorld::RemoveShape(Scene& scene, Entity e, size_t index) {
+    if (!e.Valid() || !scene.HasComponent<BoxCollider2DComponent>(e.Id()))
+        return false;
+    auto& col = scene.GetComponent<BoxCollider2DComponent>(e.Id());
+    if (index >= col.SubShapes.size()) return false;
+    auto idIt = m_impl->subShapeIds.find(e.Id());
+    if (idIt != m_impl->subShapeIds.end() && index < idIt->second.size()) {
+        b2ShapeId sid = idIt->second[index];
+        if (b2Shape_IsValid(sid))
+            b2DestroyShape(sid, true); // true: recompute body mass
+        idIt->second.erase(idIt->second.begin() + static_cast<long>(index));
+        auto bodyIt = m_impl->bodies.find(e.Id());
+        if (bodyIt != m_impl->bodies.end())
+            b2Body_SetAwake(bodyIt->second, true); // must re-settle
+    }
+    col.SubShapes.erase(col.SubShapes.begin() + static_cast<long>(index));
+    return true;
 }
 
 void PhysicsWorld::Step(Scene& scene, float dt) {
