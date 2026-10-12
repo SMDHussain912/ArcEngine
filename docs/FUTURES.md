@@ -13,8 +13,8 @@
 - [x] Step 3 Filtering + raycast: Category/Mask/GroupIndex → b2Filter, entity id in body userData, Raycast → RaycastHit — `tests/test_physics_filter.cpp`
 - [x] Editor: Inspector UI + add/remove + viewport collider outlines + stepping only in Play — `engine/src/Editor/ArcEditor.cpp`
 - [x] .arc: rigidbody2d + boxcollider2d + category/mask/group_index round-trip — `tests/test_physics_serialize.cpp`
-- [~] Step 4 Collision events (IN PROGRESS): header declares CollisionEvent + PollCollisionEvents + SensorTouched; left: finish DrainEvents wiring in Step(), RemoveBody/Destroy guards, test_physics_events.cpp
-- [ ] Step 5 CircleCollider2D: radius + offset, .arc round-trip, viewport circle outline — `tests/test_physics_shapes.cpp`
+- [x] Step 4 Collision events: DrainEvents after every sub-step (canonical pairing, exactly-once drain, stale-id nulling), PollCollisionEvents + SensorTouched, RemoveBody/Destroy purge — `tests/test_physics_events.cpp`
+- [x] Step 5 CircleCollider2D: `Radius` on BoxCollider2DComponent (Radius > 0 → b2Circle, else box), .arc round-trip, viewport circle outline, Inspector "Radius (0 = box)" — verified in `tests/test_physics_serialize.cpp` (+ linkage fix: box2d objects now linked into ArcEngine)
 - [ ] Step 6 CapsuleCollider2D: height + radius (Box2D native capsule, platformer bodies that don't snag steps), .arc, viewport outline
 - [ ] Step 7 PolygonCollider2D: convex vertices ≤8 (slopes/ramps/rocks via b2ComputeHull), vertex validation, .arc, viewport outline
 - [ ] Step 8 ChainCollider2D (static ground outlines, one-sided segments/loop) + EdgeCollider2D lite, .arc

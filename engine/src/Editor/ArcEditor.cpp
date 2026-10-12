@@ -591,20 +591,36 @@ void ArcEditor::RenderSceneToFBO(int w, int h) {
             glDeleteVertexArrays(1, &ba);
             m_sceneShader->Bind();
         }
-        // P1 Step 2: physics collider outline (green box). Drawn from the
-        // collider size + transform so you can see bodies in edit AND play.
+        // P1 Step 2/Step 5: physics collider outline. Box when Radius <= 0,
+        // circle when Radius > 0 (matches the shape AddBody creates). Drawn
+        // from the collider geometry + transform so you can see bodies in
+        // edit AND play.
         if (m_showColliders && e.HasComponent<BoxCollider2DComponent>()) {
             const auto& col = e.GetComponent<BoxCollider2DComponent>();
-            float hx = col.Size.x * 0.5f, hy = col.Size.y * 0.5f;
-            float x0 = t.Position.x - hx, x1 = t.Position.x + hx;
-            float y0 = t.Position.y - hy, y1 = t.Position.y + hy;
-            float box[8] = {x0, y0, x1, y0, x1, y1, x0, y1};
+            std::vector<float> verts;
+            if (col.Radius > 0.0f) {
+                // Circle outline: same 48-segment ring the light radius uses.
+                const int segs = 48;
+                verts.reserve((segs + 1) * 2);
+                for (int i = 0; i <= segs; ++i) {
+                    float a = 2.0f * 3.14159265f * static_cast<float>(i) / segs;
+                    verts.push_back(t.Position.x + std::cos(a) * col.Radius);
+                    verts.push_back(t.Position.y + std::sin(a) * col.Radius);
+                }
+            } else {
+                // Box outline: half extents from the full Size.
+                float hx = col.Size.x * 0.5f, hy = col.Size.y * 0.5f;
+                float x0 = t.Position.x - hx, x1 = t.Position.x + hx;
+                float y0 = t.Position.y - hy, y1 = t.Position.y + hy;
+                verts = {x0, y0, x1, y0, x1, y1, x0, y1};
+            }
             GLuint cv = 0, ca = 0;
             glGenVertexArrays(1, &ca);
             glGenBuffers(1, &cv);
             glBindVertexArray(ca);
             glBindBuffer(GL_ARRAY_BUFFER, cv);
-            glBufferData(GL_ARRAY_BUFFER, sizeof(box), box, GL_STREAM_DRAW);
+            glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(float), verts.data(),
+                         GL_STREAM_DRAW);
             glEnableVertexAttribArray(0);
             glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, reinterpret_cast<void*>(0));
             m_flatShader->Bind();
@@ -616,7 +632,10 @@ void ArcEditor::RenderSceneToFBO(int w, int h) {
                 m_flatShader->SetVec3("u_Color", 0.35f, 0.95f, 0.45f);
             else
                 m_flatShader->SetVec3("u_Color", 0.40f, 0.80f, 0.85f);
-            glDrawArrays(GL_LINE_LOOP, 0, 4);
+            if (col.Radius > 0.0f)
+                glDrawArrays(GL_LINE_STRIP, 0, static_cast<int>(verts.size() / 2));
+            else
+                glDrawArrays(GL_LINE_LOOP, 0, 4);
             glBindVertexArray(0);
             glDeleteBuffers(1, &cv);
             glDeleteVertexArrays(1, &ca);
@@ -1474,6 +1493,10 @@ void ArcEditor::InspectorWindow() {
             auto& col = sel.GetComponent<BoxCollider2DComponent>();
             ImGui::SetNextItemWidth(-1);
             if (ImGui::DragFloat2("Size", &col.Size.x, 0.01f, 0.01f, 100.0f, "%.2f"))
+                m_dirty = true;
+            // Radius > 0 switches the collider (shape AND outline) to a circle.
+            if (ImGui::DragFloat("Radius (0 = box)", &col.Radius, 0.01f, 0.0f, 100.0f,
+                                 "%.2f"))
                 m_dirty = true;
             if (ImGui::DragFloat("Density", &col.Density, 0.01f, 0.0f, 100.0f, "%.2f"))
                 m_dirty = true;
