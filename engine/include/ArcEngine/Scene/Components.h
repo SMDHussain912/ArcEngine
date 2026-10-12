@@ -84,6 +84,7 @@ struct RigidBody2DComponent {
 // wrapper converts it to Box2D half-extents. No collider = body with no shape.
 struct BoxCollider2DComponent {
     Vec2 Size{1.0f, 1.0f};
+    float Radius = 0.5f;       // radius for circle/capsule (ignored for box)
     float Density = 1.0f;      // kg/m^2 (drives mass; ignored for static bodies)
     float Friction = 0.3f;     // Coulomb friction [0,1]
     float Restitution = 0.0f;  // bounciness [0,1]

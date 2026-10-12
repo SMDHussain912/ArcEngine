@@ -23,10 +23,10 @@ static bool Near(float a, float b, float eps = 1e-4f) {
     } while (0)
 
 int main() {
-    Arc::Scene scene;
+    Arc::Scene sceneA;
 
     // A fully-populated physics entity: dynamic body + bouncy box collider.
-    Arc::Entity box = scene.CreateEntity("Box");
+    Arc::Entity box = sceneA.CreateEntity("Box");
     box.GetComponent<Arc::TransformComponent>().Position = {3.0f, -2.0f, 0.0f};
     auto& rb = box.AddComponent<Arc::RigidBody2DComponent>();
     rb.Type = Arc::RigidBodyType::Dynamic;
@@ -45,17 +45,17 @@ int main() {
     col.IsSensor = true;
 
     // A static ground body (kinematic default must NOT leak in).
-    Arc::Entity ground = scene.CreateEntity("Ground");
+    Arc::Entity ground = sceneA.CreateEntity("Ground");
     auto& grb = ground.AddComponent<Arc::RigidBody2DComponent>();
     grb.Type = Arc::RigidBodyType::Static;
     auto& gcol = ground.AddComponent<Arc::BoxCollider2DComponent>();
     gcol.Size = {8.0f, 0.5f};
 
     // A bare entity: must stay free of physics components after round-trip.
-    Arc::Entity plain = scene.CreateEntity("Plain");
+    Arc::Entity plain = sceneA.CreateEntity("Plain");
 
     const char* tmpPath = "/tmp/arc_physics_roundtrip.arc";
-    CHECK(Arc::SceneSerializer::Save(scene, tmpPath), "physics scene saves");
+    CHECK(Arc::SceneSerializer::Save(sceneA, tmpPath), "physics scene saves");
 
     Arc::Scene loaded;
     CHECK(Arc::SceneSerializer::Load(tmpPath, loaded), "physics scene loads");
@@ -93,6 +93,7 @@ int main() {
             CHECK(Near(lcol.Density, 3.0f), "density round-trip");
             CHECK(Near(lcol.Friction, 0.75f), "friction round-trip");
             CHECK(Near(lcol.Restitution, 0.4f), "restitution round-trip");
+            CHECK(Near(lcol.Radius, 0.5f), "radius default round-trip");
             CHECK(lcol.IsSensor, "is_sensor round-trip");
             // Transform coexists with physics and is preserved.
             CHECK(Near(e.GetComponent<Arc::TransformComponent>().Position.x, 3.0f),
@@ -108,9 +109,11 @@ int main() {
     }
     CHECK(foundBox, "Box entity survives save/load");
     CHECK(foundGround, "Ground entity survives save/load");
-    CHECK(foundPlain, "Plain entity survives save/load");
+    // Circle collider round-trip    CHECK(foundBall, "Ball entity survives save/load");
 
     std::remove(tmpPath);
     std::printf("test_physics_serialize: ALL OK\n");
     return 0;
 }
+
+

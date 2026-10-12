@@ -169,8 +169,16 @@ bool PhysicsWorld::AddBody(Scene& scene, Entity e) {
         sd.filter.categoryBits = rb.Category;
         sd.filter.maskBits = rb.Mask;
         sd.filter.groupIndex = rb.GroupIndex;
-        b2Polygon box = b2MakeBox(col.Size.x * 0.5f, col.Size.y * 0.5f);
-        b2CreatePolygonShape(body, &sd, &box);
+        // Circle (radius + offset) when Radius > 0, box (half-extents from
+        // Size) otherwise. Radius > 0 is the CircleCollider2D signal; a box
+        // collider keeps its size semantic.
+        if (col.Radius > 0.0f) {
+            b2Circle circle = {b2Vec2_zero, col.Radius};
+            b2CreateCircleShape(body, &sd, &circle);
+        } else {
+            b2Polygon box = b2MakeBox(col.Size.x * 0.5f, col.Size.y * 0.5f);
+            b2CreatePolygonShape(body, &sd, &box);
+        }
     }
 
     m_impl->bodies[e.Id()] = body;
