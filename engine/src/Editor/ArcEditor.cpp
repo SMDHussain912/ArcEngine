@@ -88,6 +88,9 @@ void ArcEditor::BeginFrame(float dt) {
     m_frames++;
     m_viewFps = m_viewFps * 0.95f + (dt > 0.0f ? 1.0f / dt : 60.0f) * 0.05f;
     if (m_statusMsgTime > 0.0f) m_statusMsgTime -= dt;
+    // P1 Step 2: advance the physics world while playing (fixed 1/60 inside),
+    // writing simulated poses into transforms before panels/viewport render.
+    if (m_play == PlayState::Playing) m_physics.Step(*m_scene, dt);
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
@@ -150,9 +153,14 @@ void ArcEditor::Play() {
         if (e.HasComponent<TransformComponent>())
             n.GetComponent<TransformComponent>() = e.GetComponent<TransformComponent>();
     }
+    // P1 Step 2: spin up a Box2D world and register every rigid entity.
+    m_physics.Create();
+    for (Entity e : m_scene->Entities())
+        if (e.HasComponent<RigidBody2DComponent>()) m_physics.AddBody(*m_scene, e);
     m_hasPlayBackup = true;
     m_play = PlayState::Playing;
-    AddLog("Play mode started (entity transforms backed up).");
+    AddLog("Play mode started (" + std::to_string(m_physics.BodyCount()) +
+           " physics bodies).");
 }
 
 void ArcEditor::Pause() {
@@ -182,6 +190,9 @@ void ArcEditor::Stop() {
         m_playBackup.Clear();
         m_hasPlayBackup = false;
     }
+    // P1 Step 2: tear down the sim AFTER restoring edit-time transforms so the
+    // bodies never overwrite the restored poses.
+    m_physics.Destroy();
     m_play = PlayState::Edit;
     AddLog("Stopped. Edit-time scene restored.");
 }
@@ -228,8 +239,14 @@ bool ArcEditor::LoadScene(const std::string& path) {
             n.AddComponent<GuiComponent>() = e.GetComponent<GuiComponent>();
         if (e.HasComponent<SpriteComponent>())
             n.AddComponent<SpriteComponent>() = e.GetComponent<SpriteComponent>();
+        if (e.HasComponent<RigidBody2DComponent>())
+            n.AddComponent<RigidBody2DComponent>() = e.GetComponent<RigidBody2DComponent>();
+        if (e.HasComponent<BoxCollider2DComponent>())
+            n.AddComponent<BoxCollider2DComponent>() = e.GetComponent<BoxCollider2DComponent>();
     }
     m_scene->SetFocusEntity(Entity());
+    // Physics bodies (if simulating) must be rebuilt for the freshly loaded set.
+    RebuildPhysicsBodies();
     m_undo.clear();
     m_redo.clear();
     m_dirty = false;
@@ -237,6 +254,17 @@ bool ArcEditor::LoadScene(const std::string& path) {
     m_statusMsgTime = 3.0f;
     AddLog(std::string("Loaded scene from ") + path);
     return true;
+}
+
+void ArcEditor::RebuildPhysicsBodies() {
+    // Physics only exists while Playing (the sim is created on Play, torn down
+    // on Stop). If a scene is swapped mid-play, rebuild the body set so the
+    // newly loaded rigid entities are simulated instead of stale ones.
+    if (m_play != PlayState::Playing) return;
+    m_physics.Destroy();
+    m_physics.Create();
+    for (Entity e : m_scene->Entities())
+        if (e.HasComponent<RigidBody2DComponent>()) m_physics.AddBody(*m_scene, e);
 }
 
 void ArcEditor::AddLog(const std::string& msg) {
@@ -335,6 +363,10 @@ Entity ArcEditor::DuplicateEntity(Entity src) {
         dst.AddComponent<GuiComponent>() = src.GetComponent<GuiComponent>();
     if (src.HasComponent<SpriteComponent>())
         dst.AddComponent<SpriteComponent>() = src.GetComponent<SpriteComponent>();
+    if (src.HasComponent<RigidBody2DComponent>())
+        dst.AddComponent<RigidBody2DComponent>() = src.GetComponent<RigidBody2DComponent>();
+    if (src.HasComponent<BoxCollider2DComponent>())
+        dst.AddComponent<BoxCollider2DComponent>() = src.GetComponent<BoxCollider2DComponent>();
     m_scene->SetFocusEntity(dst);
     m_dirty = true;
     AddLog("Duplicated '" + src.Name() + "' as '" + dst.Name() + "'");
@@ -557,6 +589,37 @@ void ArcEditor::RenderSceneToFBO(int w, int h) {
             glBindVertexArray(0);
             glDeleteBuffers(1, &bv);
             glDeleteVertexArrays(1, &ba);
+            m_sceneShader->Bind();
+        }
+        // P1 Step 2: physics collider outline (green box). Drawn from the
+        // collider size + transform so you can see bodies in edit AND play.
+        if (m_showColliders && e.HasComponent<BoxCollider2DComponent>()) {
+            const auto& col = e.GetComponent<BoxCollider2DComponent>();
+            float hx = col.Size.x * 0.5f, hy = col.Size.y * 0.5f;
+            float x0 = t.Position.x - hx, x1 = t.Position.x + hx;
+            float y0 = t.Position.y - hy, y1 = t.Position.y + hy;
+            float box[8] = {x0, y0, x1, y0, x1, y1, x0, y1};
+            GLuint cv = 0, ca = 0;
+            glGenVertexArrays(1, &ca);
+            glGenBuffers(1, &cv);
+            glBindVertexArray(ca);
+            glBindBuffer(GL_ARRAY_BUFFER, cv);
+            glBufferData(GL_ARRAY_BUFFER, sizeof(box), box, GL_STREAM_DRAW);
+            glEnableVertexAttribArray(0);
+            glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, reinterpret_cast<void*>(0));
+            m_flatShader->Bind();
+            m_flatShader->SetMat4("u_ViewProj", &vp[0][0]);
+            // Static bodies read as a calmer cyan; dynamic bodies vivid green.
+            bool dynamic = e.HasComponent<RigidBody2DComponent>() &&
+                           e.GetComponent<RigidBody2DComponent>().Type == RigidBodyType::Dynamic;
+            if (dynamic)
+                m_flatShader->SetVec3("u_Color", 0.35f, 0.95f, 0.45f);
+            else
+                m_flatShader->SetVec3("u_Color", 0.40f, 0.80f, 0.85f);
+            glDrawArrays(GL_LINE_LOOP, 0, 4);
+            glBindVertexArray(0);
+            glDeleteBuffers(1, &cv);
+            glDeleteVertexArrays(1, &ca);
             m_sceneShader->Bind();
         }
         // Light radius ring.
@@ -861,6 +924,20 @@ void ArcEditor::DrawMenuBar() {
             m_dirty = true;
             AddLog("Created sprite entity.");
         }
+        if (ImGui::MenuItem("Create Physics Body")) {
+            // Dynamic box body + matching 1x1 collider + a visible sprite quad.
+            Entity e = m_scene->CreateEntity("PhysicsBody");
+            e.AddComponent<RigidBody2DComponent>();
+            BoxCollider2DComponent& bc = e.AddComponent<BoxCollider2DComponent>();
+            bc.Size = {1.0f, 1.0f};
+            SpriteComponent& sp = e.AddComponent<SpriteComponent>();
+            sp.TexturePath = "assets/textures/test.png";
+            sp.Tint = Arc::Vec4(0.35f, 0.95f, 0.45f, 1.0f);
+            sp.Size = {1.0f, 1.0f};
+            m_scene->SetFocusEntity(e);
+            m_dirty = true;
+            AddLog("Created dynamic physics body.");
+        }
         if (ImGui::MenuItem("Create Light")) {
             Entity e = m_scene->CreateEntity("Light");
             e.AddComponent<LightComponent>();
@@ -928,6 +1005,7 @@ void ArcEditor::DrawMenuBar() {
     }
     if (ImGui::BeginMenu("View")) {
         ImGui::MenuItem("Grid", "G", &m_showGrid);
+        ImGui::MenuItem("Colliders", nullptr, &m_showColliders);
         if (ImGui::MenuItem("Reset Camera", "Home")) {
             ResetCamera();
             AddLog("Camera reset.");
@@ -1110,6 +1188,16 @@ void ArcEditor::HierarchyWindow() {
                 e.AddComponent<GuiComponent>();
                 m_dirty = true;
                 AddLog("Added GUI to '" + e.Name() + "'");
+            }
+            if (ImGui::MenuItem("Add RigidBody2D") && !e.HasComponent<RigidBody2DComponent>()) {
+                e.AddComponent<RigidBody2DComponent>();
+                m_dirty = true;
+                AddLog("Added RigidBody2D to '" + e.Name() + "'");
+            }
+            if (ImGui::MenuItem("Add BoxCollider2D") && !e.HasComponent<BoxCollider2DComponent>()) {
+                e.AddComponent<BoxCollider2DComponent>();
+                m_dirty = true;
+                AddLog("Added BoxCollider2D to '" + e.Name() + "'");
             }
             if (ImGui::MenuItem("Delete")) {
                 AddLog("Deleted '" + e.Name() + "'");
@@ -1346,6 +1434,66 @@ void ArcEditor::InspectorWindow() {
             sp.TexturePath = "assets/textures/test.png";
             m_dirty = true;
             AddLog("Added sprite to '" + sel.Name() + "'");
+        }
+    }
+    // --- Physics 2D (P1 Step 2) -------------------------------------------------
+    // Editing RigidBody2DComponent/BoxCollider2DComponent only marks the scene
+    // dirty at edit time; the App rebuilds the Box2D body from these fields when
+    // it (re)syncs the physics world, so gizmo/transform edits stay consistent.
+    if (sel.HasComponent<RigidBody2DComponent>()) {
+        if (ImGui::TreeNodeEx("RigidBody2D", ImGuiTreeNodeFlags_DefaultOpen)) {
+            auto& rb = sel.GetComponent<RigidBody2DComponent>();
+            int type = static_cast<int>(rb.Type);
+            if (ImGui::Combo("Body Type", &type, "Static\0Kinematic\0Dynamic\0")) {
+                rb.Type = static_cast<RigidBodyType>(type);
+                m_dirty = true;
+            }
+            if (ImGui::Checkbox("Fixed Rotation", &rb.FixedRotation)) m_dirty = true;
+            if (ImGui::DragFloat("Gravity Scale", &rb.GravityScale, 0.01f, 0.0f, 10.0f, "%.2f"))
+                m_dirty = true;
+            if (ImGui::DragFloat("Linear Damping", &rb.LinearDamping, 0.01f, 0.0f, 10.0f, "%.3f"))
+                m_dirty = true;
+            if (ImGui::DragFloat("Angular Damping", &rb.AngularDamping, 0.01f, 0.0f, 10.0f, "%.3f"))
+                m_dirty = true;
+            if (ImGui::Button("Remove RigidBody2D")) {
+                sel.RemoveComponent<RigidBody2DComponent>();
+                m_dirty = true;
+                AddLog("Removed RigidBody2D from '" + sel.Name() + "'");
+            }
+            ImGui::TreePop();
+        }
+    } else {
+        if (ImGui::Button("Add RigidBody2D")) {
+            sel.AddComponent<RigidBody2DComponent>();
+            m_dirty = true;
+            AddLog("Added RigidBody2D to '" + sel.Name() + "'");
+        }
+    }
+    if (sel.HasComponent<BoxCollider2DComponent>()) {
+        if (ImGui::TreeNodeEx("BoxCollider2D", ImGuiTreeNodeFlags_DefaultOpen)) {
+            auto& col = sel.GetComponent<BoxCollider2DComponent>();
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::DragFloat2("Size", &col.Size.x, 0.01f, 0.01f, 100.0f, "%.2f"))
+                m_dirty = true;
+            if (ImGui::DragFloat("Density", &col.Density, 0.01f, 0.0f, 100.0f, "%.2f"))
+                m_dirty = true;
+            if (ImGui::DragFloat("Friction", &col.Friction, 0.005f, 0.0f, 1.0f, "%.3f"))
+                m_dirty = true;
+            if (ImGui::DragFloat("Restitution", &col.Restitution, 0.01f, 0.0f, 1.0f, "%.2f"))
+                m_dirty = true;
+            if (ImGui::Checkbox("Is Sensor", &col.IsSensor)) m_dirty = true;
+            if (ImGui::Button("Remove BoxCollider2D")) {
+                sel.RemoveComponent<BoxCollider2DComponent>();
+                m_dirty = true;
+                AddLog("Removed BoxCollider2D from '" + sel.Name() + "'");
+            }
+            ImGui::TreePop();
+        }
+    } else {
+        if (ImGui::Button("Add BoxCollider2D")) {
+            sel.AddComponent<BoxCollider2DComponent>();
+            m_dirty = true;
+            AddLog("Added BoxCollider2D to '" + sel.Name() + "'");
         }
     }
     if (sel.HasComponent<CameraComponent>()) {

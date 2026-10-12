@@ -57,6 +57,39 @@ struct SpriteComponent {
     Vec2 Size{1.0f, 1.0f};          // world-unit quad size before Transform scale
 };
 
+// RigidBody2D (P1 Step 2): how an entity participates in the Box2D world.
+// Data only — PhysicsWorld turns this into a b2Body (see Physics/PhysicsWorld.h).
+// Static = immovable (walls/ground), Kinematic = moved by velocity/code but not
+// by forces, Dynamic = fully simulated (falls, collides, bounces).
+enum class RigidBodyType { Static = 0, Kinematic = 1, Dynamic = 2 };
+
+struct RigidBody2DComponent {
+    RigidBodyType Type = RigidBodyType::Dynamic;
+    bool FixedRotation = false; // lock Z-axis spin (platformer/top-down lite)
+    float GravityScale = 1.0f;  // 0 = float, >1 = heavy
+    float LinearDamping = 0.0f; // air drag (Box2D: velocity decay per step)
+    float AngularDamping = 0.01f;
+    // Collision filtering (P1 Step 3). Two bodies collide when each one's Mask
+    // accepts the other's Category: (A.Mask & B.Category) && (B.Mask & A.Category).
+    // Category is the layer this body occupies (one bit, e.g. 0x1); Mask is the set
+    // of layers it collides with. GroupIndex overrides both: same positive group =>
+    // always collide, same negative group => never collide (e.g. ragdoll parts).
+    uint32_t Category = 0x00000001u;
+    uint32_t Mask = 0xFFFFFFFFu;
+    int GroupIndex = 0;
+};
+
+// BoxCollider2D (P1 Step 2): box collision shape for the parent body. Size is
+// the FULL width/height in world units (like SpriteComponent.Size); the physics
+// wrapper converts it to Box2D half-extents. No collider = body with no shape.
+struct BoxCollider2DComponent {
+    Vec2 Size{1.0f, 1.0f};
+    float Density = 1.0f;      // kg/m^2 (drives mass; ignored for static bodies)
+    float Friction = 0.3f;     // Coulomb friction [0,1]
+    float Restitution = 0.0f;  // bounciness [0,1]
+    bool IsSensor = false;     // overlaps reported, no physical response
+};
+
 // GUI widget (Godot Control / Unreal WidgetComponent-lite): drawn as an
 // overlay quad in the editor viewport; runtime input comes with UI focus work.
 struct GuiComponent {

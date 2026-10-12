@@ -8,6 +8,7 @@
 // click-select picking, and a translate/rotate/scale gizmo.
 #pragma once
 #include "ArcEngine/Core/Window.h"
+#include "ArcEngine/Physics/PhysicsWorld.h"
 #include "ArcEngine/Renderer/Renderer.h"
 #include "ArcEngine/Renderer/Shader.h"
 #include "ArcEngine/Renderer/SpriteBatch.h"
@@ -91,6 +92,7 @@ private:
     void Stop();
     bool SaveScene(const std::string& path);
     bool LoadScene(const std::string& path);
+    void RebuildPhysicsBodies(); // re-register rigid entities into the sim (only while Playing)
 
     Scene* m_scene = nullptr;
     Window* m_window = nullptr;
@@ -105,6 +107,10 @@ private:
     std::unique_ptr<Shader> m_sceneShader;
     std::unique_ptr<Shader> m_flatShader;
     SpriteBatch m_sprites; // P1: sprite entities render in the viewport FBO
+    // P1 Step 2: Box2D world active only while playing; drives transforms and
+    // the green collider overlay. Destroyed on Stop (transforms restored).
+    PhysicsWorld m_physics;
+    bool m_showColliders = true;
     uint32_t m_gridVao = 0;
     uint32_t m_gridVbo = 0;
     int m_gridVerts = 0;

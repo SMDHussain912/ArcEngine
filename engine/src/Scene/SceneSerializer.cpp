@@ -5,6 +5,7 @@
 
 #include <yaml-cpp/yaml.h>
 #include <fstream>
+#include <filesystem>
 
 namespace Arc {
 
@@ -91,6 +92,18 @@ GuiComponent::Kind GuiKindFromStr(const std::string& s) {
     return GuiComponent::Kind::Button;
 }
 
+std::string RigidBodyTypeToStr(RigidBodyType t) {
+    if (t == RigidBodyType::Static) return "static";
+    if (t == RigidBodyType::Kinematic) return "kinematic";
+    return "dynamic";
+}
+
+RigidBodyType RigidBodyTypeFromStr(const std::string& s) {
+    if (s == "static") return RigidBodyType::Static;
+    if (s == "kinematic") return RigidBodyType::Kinematic;
+    return RigidBodyType::Dynamic;
+}
+
 } // namespace
 
 bool SceneSerializer::Save(Scene& scene, const std::string& path) {
@@ -160,10 +173,40 @@ bool SceneSerializer::Save(Scene& scene, const std::string& path) {
             gn["colors"] = bg;
             ent["gui"] = gn;
         }
+        if (e.HasComponent<RigidBody2DComponent>()) {
+            const auto& rb = e.GetComponent<RigidBody2DComponent>();
+            YAML::Node rbn;
+            rbn["type"] = RigidBodyTypeToStr(rb.Type);
+            rbn["fixed_rotation"] = rb.FixedRotation;
+            rbn["gravity_scale"] = rb.GravityScale;
+            rbn["linear_damping"] = rb.LinearDamping;
+            rbn["angular_damping"] = rb.AngularDamping;
+            rbn["category"] = rb.Category;
+            rbn["mask"] = rb.Mask;
+            rbn["group_index"] = rb.GroupIndex;
+            ent["rigidbody2d"] = rbn;
+        }
+        if (e.HasComponent<BoxCollider2DComponent>()) {
+            const auto& col = e.GetComponent<BoxCollider2DComponent>();
+            YAML::Node ccn;
+            ccn["size"] = Vec2Node(col.Size);
+            ccn["density"] = col.Density;
+            ccn["friction"] = col.Friction;
+            ccn["restitution"] = col.Restitution;
+            ccn["is_sensor"] = col.IsSensor;
+            ent["boxcollider2d"] = ccn;
+        }
         entities.push_back(ent);
         count++;
     }
     root["entities"] = entities;
+
+    // Ensure the parent directory exists (e.g. assets/scenes/ on a fresh
+    // checkout) — ofstream won't create it, so a missing dir silently fails.
+    std::error_code ec;
+    std::filesystem::path parent = std::filesystem::path(path).parent_path();
+    if (!parent.empty())
+        std::filesystem::create_directories(parent, ec);
 
     std::ofstream f(path);
     if (!f) {
@@ -272,6 +315,36 @@ bool SceneSerializer::Load(const std::string& path, Scene& outScene) {
                     g.TextColor = NodeVec3(gn["colors"]["text"], g.TextColor);
                 }
                 e.AddComponent<GuiComponent>() = g;
+            }
+            if (ent["rigidbody2d"]) {
+                const auto& rbn = ent["rigidbody2d"];
+                RigidBody2DComponent rb;
+                rb.Type = RigidBodyTypeFromStr(
+                    rbn["type"] ? rbn["type"].as<std::string>("dynamic") : "dynamic");
+                rb.FixedRotation =
+                    rbn["fixed_rotation"] ? rbn["fixed_rotation"].as<bool>(false) : false;
+                rb.GravityScale =
+                    rbn["gravity_scale"] ? rbn["gravity_scale"].as<float>(1.0f) : 1.0f;
+                rb.LinearDamping =
+                    rbn["linear_damping"] ? rbn["linear_damping"].as<float>(0.0f) : 0.0f;
+                rb.AngularDamping =
+                    rbn["angular_damping"] ? rbn["angular_damping"].as<float>(0.01f) : 0.01f;
+                rb.Category =
+                    rbn["category"] ? rbn["category"].as<uint32_t>(0x00000001u) : 0x00000001u;
+                rb.Mask = rbn["mask"] ? rbn["mask"].as<uint32_t>(0xFFFFFFFFu) : 0xFFFFFFFFu;
+                rb.GroupIndex =
+                    rbn["group_index"] ? rbn["group_index"].as<int>(0) : 0;
+                e.AddComponent<RigidBody2DComponent>() = rb;
+            }
+            if (ent["boxcollider2d"]) {
+                const auto& ccn = ent["boxcollider2d"];
+                BoxCollider2DComponent col;
+                col.Size = NodeVec2(ccn["size"], col.Size);
+                col.Density = ccn["density"] ? ccn["density"].as<float>(1.0f) : 1.0f;
+                col.Friction = ccn["friction"] ? ccn["friction"].as<float>(0.3f) : 0.3f;
+                col.Restitution = ccn["restitution"] ? ccn["restitution"].as<float>(0.0f) : 0.0f;
+                col.IsSensor = ccn["is_sensor"] ? ccn["is_sensor"].as<bool>(false) : false;
+                e.AddComponent<BoxCollider2DComponent>() = col;
             }
             count++;
         }

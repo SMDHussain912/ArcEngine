@@ -29,3 +29,27 @@ set_target_properties(test_sprites PROPERTIES
   CXX_STANDARD_REQUIRED ON
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
 )
+
+add_executable(test_physics test_physics.cpp)
+target_link_libraries(test_physics PRIVATE ArcEngine)
+set_target_properties(test_physics PROPERTIES
+  CXX_STANDARD 17
+  CXX_STANDARD_REQUIRED ON
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
+)
+
+add_executable(test_physics_serialize test_physics_serialize.cpp)
+target_link_libraries(test_physics_serialize PRIVATE ArcEngine)
+set_target_properties(test_physics_serialize PROPERTIES
+  CXX_STANDARD 17
+  CXX_STANDARD_REQUIRED ON
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
+)
+
+add_executable(test_physics_filter test_physics_filter.cpp)
+target_link_libraries(test_physics_filter PRIVATE ArcEngine)
+set_target_properties(test_physics_filter PROPERTIES
+  CXX_STANDARD 17
+  CXX_STANDARD_REQUIRED ON
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
+)
