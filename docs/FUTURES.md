@@ -70,14 +70,36 @@
 - [ ] AssetManager already done; add: model importer hook (cgltf later), .arc scene import path
 - [ ] CI: cmake configure+build on Linux (GitHub Actions later)
 
-## P2 — Shippable 3D
-- [ ] Camera3D (perspective + orbit helper)
-- [ ] Material (albedo/roughness/metallic, dir+point+spot, forward pass) + real light shading hookup
-- [ ] Model via cgltf (mesh + materials + nodes) — vendor third_party/cgltf
-- [ ] PhysicsServer3D over Jolt: RigidBody3D, StaticBody3D, CharacterBody3D, layers, raycast — vendor third_party/jolt
-- [ ] Lua 3D API: transform3d, camera helpers, spawn_model
-- [ ] examples/09-model3d: lit glTF room + falling crates + orbit camera
-- [ ] projects/demo_3d/ playground .arc; accept: lit 3D + rigid bodies + orbit cam, GLES-compatible shaders
+## P2 — Shippable 3D (expanded: "stylized-mobile 3D" lane — clean look that runs on a phone, GLES-safe from day one)
+> Our 3D today: colored 2D primitives only (triangle/quad/circle/ring/plane/cross/arrow), no 3D camera/lights/textures/models/physics. Stubs reserved in MeshId (`gltf:<path>`, `prim:cube|sphere`).
+> Research: Godot 4 (Forward+/Mobile/Compatibility — we build ONE scalable forward renderer), glTF 2.0 ISO ("JPEG of 3D", load via single-header cgltf, PBR metallic-roughness core), UE5 ideas scoped down (Nanite→LOD chain, Lumen→baked lightmap, World Partition→chunk streaming), Jolt (rigid + virtual character controller + vehicles).
+
+### 3D Rendering core
+- [ ] Step 3D-1 Camera3D: perspective + orbit helper (yaw/pitch/dist, damping), active stack with Camera2D, frustum culling lite, editor orbit gizmo
+- [ ] Step 3D-2 Material: albedo/roughness/metallic (+emissive), dir+point+spot lights (count-capped forward pass), real shading hookup for LightComponent, GLES precision-safe shaders — `engine/*/Rendering/Material.*`
+- [ ] Step 3D-3 Primitives 3D: cube/sphere/cylinder/cone/capsule/torus (indexed, normals+UVs), wireframe toggle, viewport primitive menu
+- [ ] Step 3D-4 Forward renderer: depth-tested opaque pass + alpha pass, per-material uniforms, fog (exp2 + height lite), sky gradient + sun, gamma-correct output
+- [ ] Step 3D-5 Baked lighting lite: lightmap UV bake tool (simple unwrapper), ambient probe (SH-lite 9 coeffs), fake AO (cavity from normals), emissive bloom-lite (threshold + blur mip) — 80% of AAA look, 0% realtime GI cost
+
+### 3D Models + animation
+- [ ] Step 3D-6 glTF 2.0 import via cgltf (vendor third_party/cgltf): nodes + meshes + PBR materials + textures + skins, `gltf:<path>` MeshId live, importer warnings panel, test with sample models — `examples/14-model3d`
+- [ ] Step 3D-7 Skeletal animation: skinning shader path, clip player (play/blend/crossfade), bone debug draw, AnimationPlayer 3D tracks
+- [ ] Step 3D-8 Mesh LOD chain (Nanite-lite): 3 auto levels per mesh, distance-switch with hysteresis, editor LOD preview, perf test
+- [ ] Step 3D-9 Static Batching + instancing: merge static meshes per material, GPU instancing for repeats (trees/rocks), draw-call counter in profiler
+
+### 3D Physics (Jolt — vendor third_party/jolt)
+- [ ] Step 3D-10 PhysicsServer3D facade (mirror PhysicsWorld PIMPL pattern): RigidBody3D, StaticBody3D, box/sphere/capsule/convex-hull shapes, layers, raycast, fixed 1/60 — `tests/test_physics3d.cpp`
+- [ ] Step 3D-11 Character controller via Jolt virtual character (don't hand-roll): walk/sprint/jump, slopes/steps, moving platforms lite, test course
+- [ ] Step 3D-12 Vehicle lite (Jolt vehicle system): arcade car (steer/throttle/brake, drift factor), `examples/15-vehicle`
+- [ ] Step 3D-13 Ragdoll lite: jointed bodies from skeleton, blend animated→ragdoll on death, test
+
+### 3D Gameplay + world
+- [ ] Step 3D-14 ThirdPersonController: follow cam + collision (raycast pull-in), input-relative movement, jump/ coyote, test scene
+- [ ] Step 3D-15 Level streaming (World-Partition-lite): chunked collections + load radius, async decode queue, loading screen hook, `projects/demo_3d/` playground .arc
+- [ ] Step 3D-16 3D particles + trails: billboarded GPU points, ribbon trails (sword swings, wheels), collision-lite (floor kill plane)
+- [ ] Step 3D-17 Sky + weather lite: time-of-day curve (sun angle/color, CanvasModulate-3D), rain/snow particle presets, puddle-roughness note
+- [ ] Lua 3D API: transform3d, camera helpers, spawn_model; accept: lit 3D level + rigid bodies + orbit cam, GLES-compatible shaders
+- [ ] P2 demo: `examples/14-model3d` lit glTF room + falling crates + orbit camera — tag v1.0-p2
 
 ## P3 — Editor (visual building)
 - [x] Done: ImGui Hierarchy/Inspector/Viewport/Assets/Console, Play/Stop, gizmos, undo/redo
