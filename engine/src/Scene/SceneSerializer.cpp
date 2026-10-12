@@ -191,6 +191,7 @@ bool SceneSerializer::Save(Scene& scene, const std::string& path) {
             YAML::Node ccn;
             ccn["size"] = Vec2Node(col.Size);
             ccn["radius"] = col.Radius;
+            ccn["height"] = col.Height;
             ccn["density"] = col.Density;
             ccn["friction"] = col.Friction;
             ccn["restitution"] = col.Restitution;
@@ -341,7 +342,8 @@ bool SceneSerializer::Load(const std::string& path, Scene& outScene) {
                 const auto& ccn = ent["boxcollider2d"];
                 BoxCollider2DComponent col;
                 col.Size = NodeVec2(ccn["size"], col.Size);
-                col.Radius = ccn["radius"] ? ccn["radius"].as<float>(0.5f) : 0.5f;
+                col.Radius = ccn["radius"] ? ccn["radius"].as<float>(0.0f) : 0.0f;
+                col.Height = ccn["height"] ? ccn["height"].as<float>(0.0f) : 0.0f;
                 col.Density = ccn["density"] ? ccn["density"].as<float>(1.0f) : 1.0f;
                 col.Friction = ccn["friction"] ? ccn["friction"].as<float>(0.3f) : 0.3f;
                 col.Restitution = ccn["restitution"] ? ccn["restitution"].as<float>(0.0f) : 0.0f;

@@ -84,7 +84,13 @@ struct RigidBody2DComponent {
 // wrapper converts it to Box2D half-extents. No collider = body with no shape.
 struct BoxCollider2DComponent {
     Vec2 Size{1.0f, 1.0f};
-    float Radius = 0.5f;       // radius for circle/capsule (ignored for box)
+    // Shape selection (P1 Steps 5+6), most-specific first:
+    //   Height > 0  -> capsule (segment length Height, end-cap radius Radius)
+    //   Radius  > 0 -> circle
+    //   otherwise   -> box (half-extents from Size)
+    // Defaults keep legacy scenes as boxes.
+    float Radius = 0.0f;       // circle/capsule radius (0 = box)
+    float Height = 0.0f;       // capsule segment length (0 = box/circle)
     float Density = 1.0f;      // kg/m^2 (drives mass; ignored for static bodies)
     float Friction = 0.3f;     // Coulomb friction [0,1]
     float Restitution = 0.0f;  // bounciness [0,1]

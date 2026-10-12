@@ -146,6 +146,52 @@ int main() {
         pw.Destroy();
     }
 
+    // --- 4b. Shape selection: circle + capsule rest at THEIR heights ---
+    // Floor top is y=0.5 (Size 100x1 at origin). A circle r rests at 0.5+r;
+    // a capsule (segment H, cap radius r) rests at 0.5 + H/2 + r. These only
+    // hold if AddBody created the right b2 shape — a box built from Size
+    // 1x1 would also rest near y=1.0, so the capsule case (1.25) is the
+    // one that truly distinguishes capsule vs box.
+    {
+        Arc::Scene s;
+        auto floor = s.CreateEntity("Floor");
+        auto& frb = floor.AddComponent<Arc::RigidBody2DComponent>();
+        frb.Type = Arc::RigidBodyType::Static;
+        auto& fcol = floor.AddComponent<Arc::BoxCollider2DComponent>();
+        fcol.Size = {100.0f, 1.0f}; // Radius/Height stay 0 => box
+
+        auto ball = s.CreateEntity("Ball");
+        ball.GetComponent<Arc::TransformComponent>().Position = {0.0f, 5.0f, 0.0f};
+        ball.AddComponent<Arc::RigidBody2DComponent>().Type =
+            Arc::RigidBodyType::Dynamic;
+        auto& bcol = ball.AddComponent<Arc::BoxCollider2DComponent>();
+        bcol.Radius = 0.5f; // Height 0 => circle
+
+        auto pill = s.CreateEntity("Pill");
+        pill.GetComponent<Arc::TransformComponent>().Position = {3.0f, 5.0f, 0.0f};
+        auto& prb = pill.AddComponent<Arc::RigidBody2DComponent>();
+        prb.Type = Arc::RigidBodyType::Dynamic;
+        prb.FixedRotation = true;
+        auto& pcol = pill.AddComponent<Arc::BoxCollider2DComponent>();
+        pcol.Radius = 0.25f;
+        pcol.Height = 1.0f; // => capsule: total half-height 0.75
+
+        Arc::PhysicsWorld pw;
+        pw.Create();
+        pw.AddBody(s, floor);
+        pw.AddBody(s, ball);
+        pw.AddBody(s, pill);
+        RunSeconds(pw, s, 3.0f);
+
+        float yBall = ball.GetComponent<Arc::TransformComponent>().Position.y;
+        float yPill = pill.GetComponent<Arc::TransformComponent>().Position.y;
+        CHECK(yBall > 0.9f && yBall < 1.1f,
+              "circle rests at floor_top + radius (0.5 + 0.5)");
+        CHECK(yPill > 1.1f && yPill < 1.4f,
+              "capsule rests at floor_top + H/2 + r (0.5 + 0.5 + 0.25)");
+        pw.Destroy();
+    }
+
     // --- 5. Entities without rigid bodies / post-destroy are safe no-ops ---
     {
         Arc::Scene s;

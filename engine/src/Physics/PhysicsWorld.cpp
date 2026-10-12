@@ -169,8 +169,25 @@ bool PhysicsWorld::AddBody(Scene& scene, Entity e) {
         sd.filter.categoryBits = rb.Category;
         sd.filter.maskBits = rb.Mask;
         sd.filter.groupIndex = rb.GroupIndex;
-        b2Polygon box = b2MakeBox(col.Size.x * 0.5f, col.Size.y * 0.5f);
-        b2CreatePolygonShape(body, &sd, &box);
+        // Shape selection (P1 Steps 5+6), most-specific first:
+        //   Height > 0  -> capsule (vertical segment of length Height + Radius caps)
+        //   Radius  > 0 -> circle
+        //   otherwise   -> box (half-extents from Size)
+        // The vertical capsule is the platformer body: rounded ends roll over
+        // step edges instead of snagging them.
+        if (col.Height > 0.0f) {
+            b2Capsule cap;
+            cap.center1 = {0.0f, -col.Height * 0.5f};
+            cap.center2 = {0.0f, col.Height * 0.5f};
+            cap.radius = col.Radius;
+            b2CreateCapsuleShape(body, &sd, &cap);
+        } else if (col.Radius > 0.0f) {
+            b2Circle circle = {b2Vec2_zero, col.Radius};
+            b2CreateCircleShape(body, &sd, &circle);
+        } else {
+            b2Polygon box = b2MakeBox(col.Size.x * 0.5f, col.Size.y * 0.5f);
+            b2CreatePolygonShape(body, &sd, &box);
+        }
     }
 
     m_impl->bodies[e.Id()] = body;

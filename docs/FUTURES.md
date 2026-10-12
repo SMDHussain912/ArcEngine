@@ -15,7 +15,7 @@
 - [x] .arc: rigidbody2d + boxcollider2d + category/mask/group_index round-trip — `tests/test_physics_serialize.cpp`
 - [x] Step 4 Collision events: DrainEvents after every sub-step (canonical pairing, exactly-once drain, stale-id nulling), PollCollisionEvents + SensorTouched, RemoveBody/Destroy purge — `tests/test_physics_events.cpp`
 - [x] Step 5 CircleCollider2D: `Radius` on BoxCollider2DComponent (Radius > 0 → b2Circle, else box), .arc round-trip, viewport circle outline, Inspector "Radius (0 = box)" — verified in `tests/test_physics_serialize.cpp` (+ linkage fix: box2d objects now linked into ArcEngine)
-- [ ] Step 6 CapsuleCollider2D: height + radius (Box2D native capsule, platformer bodies that don't snag steps), .arc, viewport outline
+- [x] Step 6 CapsuleCollider2D: `Height` on BoxCollider2DComponent (Height > 0 → b2Capsule, vertical segment + Radius caps; then Radius > 0 → circle; else box), .arc round-trip, viewport capsule outline, Inspector field — rest-height tests prove the real shape (`tests/test_physics.cpp` 4b), round-trip in `tests/test_physics_serialize.cpp`
 - [ ] Step 7 PolygonCollider2D: convex vertices ≤8 (slopes/ramps/rocks via b2ComputeHull), vertex validation, .arc, viewport outline
 - [ ] Step 8 ChainCollider2D (static ground outlines, one-sided segments/loop) + EdgeCollider2D lite, .arc
 - [ ] Step 9 Compound bodies: N shapes per body (box + sensor-feet pattern), per-shape material + per-shape sensor flag, AddShape/RemoveShape API, test

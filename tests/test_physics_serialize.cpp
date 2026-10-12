@@ -51,6 +51,22 @@ int main() {
     auto& gcol = ground.AddComponent<Arc::BoxCollider2DComponent>();
     gcol.Size = {8.0f, 0.5f};
 
+    // Circle collider (P1 Step 5): Radius > 0 with Height == 0.
+    Arc::Entity ball = sceneA.CreateEntity("Ball");
+    ball.GetComponent<Arc::TransformComponent>().Position = {0.0f, -5.0f, 0.0f};
+    ball.AddComponent<Arc::RigidBody2DComponent>().Type = Arc::RigidBodyType::Dynamic;
+    auto& ballCol = ball.AddComponent<Arc::BoxCollider2DComponent>();
+    ballCol.Radius = 0.6f;
+    ballCol.IsSensor = true;
+
+    // Capsule collider (P1 Step 6): Height > 0 (segment length) + Radius caps.
+    Arc::Entity pill = sceneA.CreateEntity("Pill");
+    pill.GetComponent<Arc::TransformComponent>().Position = {2.0f, -5.0f, 0.0f};
+    pill.AddComponent<Arc::RigidBody2DComponent>().Type = Arc::RigidBodyType::Dynamic;
+    auto& pillCol = pill.AddComponent<Arc::BoxCollider2DComponent>();
+    pillCol.Radius = 0.25f;
+    pillCol.Height = 1.0f;
+
     // A bare entity: must stay free of physics components after round-trip.
     Arc::Entity plain = sceneA.CreateEntity("Plain");
 
@@ -93,7 +109,8 @@ int main() {
             CHECK(Near(lcol.Density, 3.0f), "density round-trip");
             CHECK(Near(lcol.Friction, 0.75f), "friction round-trip");
             CHECK(Near(lcol.Restitution, 0.4f), "restitution round-trip");
-            CHECK(Near(lcol.Radius, 0.5f), "radius default round-trip");
+            CHECK(Near(lcol.Radius, 0.0f), "radius default round-trip (0 = box)");
+            CHECK(Near(lcol.Height, 0.0f), "height default round-trip (0 = not capsule)");
             CHECK(lcol.IsSensor, "is_sensor round-trip");
             // Transform coexists with physics and is preserved.
             CHECK(Near(e.GetComponent<Arc::TransformComponent>().Position.x, 3.0f),
@@ -109,7 +126,24 @@ int main() {
     }
     CHECK(foundBox, "Box entity survives save/load");
     CHECK(foundGround, "Ground entity survives save/load");
-    // Circle collider round-trip    CHECK(foundBall, "Ball entity survives save/load");
+    // Circle + capsule collider round-trips (P1 Steps 5+6).
+    bool foundBall = false, foundPill = false;
+    for (Arc::Entity e : loaded.Entities()) {
+        if (e.Name() == "Ball") {
+            foundBall = true;
+            const auto& c = e.GetComponent<Arc::BoxCollider2DComponent>();
+            CHECK(Near(c.Radius, 0.6f), "circle radius round-trip");
+            CHECK(Near(c.Height, 0.0f), "circle height stays 0");
+            CHECK(c.IsSensor, "ball is_sensor round-trip");
+        } else if (e.Name() == "Pill") {
+            foundPill = true;
+            const auto& c = e.GetComponent<Arc::BoxCollider2DComponent>();
+            CHECK(Near(c.Radius, 0.25f), "capsule cap radius round-trip");
+            CHECK(Near(c.Height, 1.0f), "capsule height round-trip");
+        }
+    }
+    CHECK(foundBall, "Ball entity survives save/load");
+    CHECK(foundPill, "Pill entity survives save/load");
 
     std::remove(tmpPath);
     std::printf("test_physics_serialize: ALL OK\n");

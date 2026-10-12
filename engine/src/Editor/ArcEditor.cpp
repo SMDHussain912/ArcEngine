@@ -591,14 +591,42 @@ void ArcEditor::RenderSceneToFBO(int w, int h) {
             glDeleteVertexArrays(1, &ba);
             m_sceneShader->Bind();
         }
-        // P1 Step 2/Step 5: physics collider outline. Box when Radius <= 0,
-        // circle when Radius > 0 (matches the shape AddBody creates). Drawn
-        // from the collider geometry + transform so you can see bodies in
-        // edit AND play.
+        // P1 Step 2/Steps 5+6: physics collider outline. Capsule when
+        // Height > 0, circle when Radius > 0, box otherwise — same
+        // most-specific-first selection AddBody uses for the real shape.
         if (m_showColliders && e.HasComponent<BoxCollider2DComponent>()) {
             const auto& col = e.GetComponent<BoxCollider2DComponent>();
             std::vector<float> verts;
-            if (col.Radius > 0.0f) {
+            if (col.Height > 0.0f) {
+                // Vertical capsule: two straight sides + semicircular caps
+                // around (x, y ± H/2), walked counter-clockwise from the
+                // right-bottom edge; start point repeated to close.
+                const int capSegs = 24;
+                float r = col.Radius, half = col.Height * 0.5f;
+                float cx = t.Position.x, cy = t.Position.y;
+                float x1 = cx + r, x0 = cx - r;
+                float yb = cy - half, yt = cy + half;
+                verts.push_back(x1);
+                verts.push_back(yb); // start: right side of bottom cap
+                verts.push_back(x1);
+                verts.push_back(yt); // right side up
+                for (int i = 1; i < capSegs; ++i) { // top cap, 0 -> PI
+                    float a = 3.14159265f * static_cast<float>(i) / capSegs;
+                    verts.push_back(cx + std::cos(a) * r);
+                    verts.push_back(yt + std::sin(a) * r);
+                }
+                verts.push_back(x0);
+                verts.push_back(yt); // left side down start
+                verts.push_back(x0);
+                verts.push_back(yb);
+                for (int i = 1; i < capSegs; ++i) { // bottom cap, PI -> 2PI
+                    float a = 3.14159265f * (1.0f + static_cast<float>(i) / capSegs);
+                    verts.push_back(cx + std::cos(a) * r);
+                    verts.push_back(yb + std::sin(a) * r);
+                }
+                verts.push_back(x1); // close back to start
+                verts.push_back(yb);
+            } else if (col.Radius > 0.0f) {
                 // Circle outline: same 48-segment ring the light radius uses.
                 const int segs = 48;
                 verts.reserve((segs + 1) * 2);
@@ -632,7 +660,7 @@ void ArcEditor::RenderSceneToFBO(int w, int h) {
                 m_flatShader->SetVec3("u_Color", 0.35f, 0.95f, 0.45f);
             else
                 m_flatShader->SetVec3("u_Color", 0.40f, 0.80f, 0.85f);
-            if (col.Radius > 0.0f)
+            if (col.Radius > 0.0f || col.Height > 0.0f)
                 glDrawArrays(GL_LINE_STRIP, 0, static_cast<int>(verts.size() / 2));
             else
                 glDrawArrays(GL_LINE_LOOP, 0, 4);
@@ -1494,9 +1522,13 @@ void ArcEditor::InspectorWindow() {
             ImGui::SetNextItemWidth(-1);
             if (ImGui::DragFloat2("Size", &col.Size.x, 0.01f, 0.01f, 100.0f, "%.2f"))
                 m_dirty = true;
-            // Radius > 0 switches the collider (shape AND outline) to a circle.
+            // Radius > 0 switches the collider (shape AND outline) to a circle;
+            // Height > 0 takes priority and makes it a capsule (Radius = caps).
             if (ImGui::DragFloat("Radius (0 = box)", &col.Radius, 0.01f, 0.0f, 100.0f,
                                  "%.2f"))
+                m_dirty = true;
+            if (ImGui::DragFloat("Height (0 = box/circle)", &col.Height, 0.01f, 0.0f,
+                                 100.0f, "%.2f"))
                 m_dirty = true;
             if (ImGui::DragFloat("Density", &col.Density, 0.01f, 0.0f, 100.0f, "%.2f"))
                 m_dirty = true;
