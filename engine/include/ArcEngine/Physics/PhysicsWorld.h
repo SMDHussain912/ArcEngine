@@ -64,19 +64,27 @@ public:
     // --- Collision events (P1 Step 4) ---
     // Box2D buffers begin/end touches for contacts (solid-solid) and sensors
     // (sensor-vs-anything) during b2World_Step. We drain those buffers after
-    // every fixed sub-step into m_events (never losing events when one frame
-    // advances the sim multiple times) and hand out a copy here.
+    // every fixed sub-step into a raw id-pair buffer (never losing events when
+    // one frame advances the sim multiple times) and resolve to Entity handles
+    // at poll time. Each event is reported exactly once — poll right after
+    // Step() each frame.
+    //
+    // Future-proofing contract (do not break — Area2D, netcode, replay rely on it):
+    //  * Pairs are canonical: entityA.Id() <= entityB.Id(), so the same pair
+    //    always compares equal regardless of Box2D's A/B wire order.
+    //  * Poll is draining (exactly-once); SensorTouched is a non-consuming peek.
+    //  * Stale ids are dropped at drain (destroyed b2 shapes/bodies) AND at poll
+    //    (entities gone from the scene). RemoveBody also purges queued pairs.
     struct CollisionEvent {
-        Entity entityA{};  // first participant (valid iff drained mapping ok)
-        Entity entityB{};  // second participant
+        Entity entityA{};  // lower id of the pair (valid iff mapping held)
+        Entity entityB{};  // higher id of the pair
         bool begun = true; // true = begin touch this step, false = end touch
         bool sensor = false; // true = sensor overlap event, false = solid contact
     };
-    // All begin/end touches since the last call (copy). Draining means each
-    // event is reported exactly once — poll right after Step() each frame.
+    // All begin/end touches since the last call (copy, canonical order).
     std::vector<CollisionEvent> PollCollisionEvents(Scene& scene);
-    // Convenience: did a *sensor* owned by `sensorEntity` begin touching
-    // `otherEntity` since the last drain? Scans the same drained buffer.
+    // Peek (does NOT consume): did a *sensor* owned by `sensorEntity` begin
+    // touching `otherEntity` since the last drain? Order-independent.
     bool SensorTouched(Scene& scene, Entity sensorEntity, Entity otherEntity) const;
     // Raycast the world from `origin` toward `translation` (a direction*length),
     // returning the closest hit as an ECS-friendly result. `hit` is false when

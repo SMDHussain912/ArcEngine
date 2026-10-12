@@ -6,12 +6,29 @@
 
 #include <box2d/box2d.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace Arc {
+
+namespace {
+
+// Raw begin/end touch drained after every fixed sub-step (Box2D's contact and
+// sensor buffers reset per b2World_Step, so per-substep draining is the only
+// way multi-substep frames keep every event). Poll resolves ids to Entity
+// handles + clears the buffer.
+struct RawEvent {
+    uint32_t idA = 0;
+    uint32_t idB = 0;
+    bool began = true; // true = begin touch, false = end touch
+    bool sensor = false; // true = sensor overlap, false = solid contact
+};
+
+} // namespace
 
 // All Box2D C types are confined to this translation unit via the PIMPL Impl.
 struct PhysicsWorld::Impl {
@@ -20,18 +37,8 @@ struct PhysicsWorld::Impl {
     bool created = false;
     // entity id -> Box2D body handle. One body per rigid entity.
     std::unordered_map<uint32_t, b2BodyId> bodies;
-
-    // Raw begin/end touches drained after every fixed sub-step (Box2D's event
-    // buffers reset per b2World_Step, so buffering here survives multi-substep
-    // frames). Entity ids are resolved to Handles at poll time so stale ids
-    // from destroyed bodies are dropped when the scene no longer lists them.
-    struct RawEvent {
-        uint32_t a = 0;
-        uint32_t b = 0;
-        bool begun = true;
-        bool sensor = false;
-    };
     std::vector<RawEvent> events;
+
 
     static constexpr float kFixedStep = 1.0f / 60.0f; // Box2D tuned step
     static constexpr int kSubSteps = 4;                // recommended solver iterations
@@ -63,6 +70,7 @@ void PhysicsWorld::Destroy() {
         b2DestroyWorld(m_impl->world); // destroys all bodies it owns
         m_impl->world = {};
         m_impl->bodies.clear();
+        m_impl->events.clear();
         m_impl->accumulator = 0.0f;
         m_impl->created = false;
     }
@@ -75,6 +83,45 @@ static b2BodyType ToB2BodyType(RigidBodyType t) {
         case RigidBodyType::Dynamic:
         default: return b2_dynamicBody;
     }
+}
+
+// Drain one sub-step's begin/end touches into the raw buffer. Must run after
+// EVERY b2World_Step (Box2D clears its transient buffers per step, so events
+// from intermediate sub-steps would otherwise be lost). Pairs are stored in
+// canonical id order (min first) so consumers compare stably. Stale shape ids
+// from bodies destroyed mid-frame are dropped via b2Shape_IsValid.
+static void DrainEvents(b2WorldId world, std::vector<RawEvent>& out) {
+    // shape -> owning body -> stored entity id. Guards: destroyed shapes/bodies
+    // are dropped here (b2 docs warn event ids go stale on destroy).
+    auto entityOf = [](b2ShapeId sid) -> uint32_t {
+        if (!b2Shape_IsValid(sid)) return 0;
+        b2BodyId b = b2Shape_GetBody(sid);
+        if (!b2Body_IsValid(b)) return 0;
+        uintptr_t id = reinterpret_cast<uintptr_t>(b2Body_GetUserData(b));
+        return static_cast<uint32_t>(id);
+    };
+    auto push = [&out](uint32_t a, uint32_t b, bool began, bool sensor) {
+        if (a == 0 || b == 0) return;           // unmapped/stale side — drop
+        if (a == b) return;                     // self-touch (same entity) — drop
+        if (b < a) out.push_back({b, a, began, sensor});
+        else out.push_back({a, b, began, sensor});
+    };
+
+    b2ContactEvents ce = b2World_GetContactEvents(world);
+    for (int i = 0; i < ce.beginCount; ++i)
+        push(entityOf(ce.beginEvents[i].shapeIdA), entityOf(ce.beginEvents[i].shapeIdB),
+             true, false);
+    for (int i = 0; i < ce.endCount; ++i)
+        push(entityOf(ce.endEvents[i].shapeIdA), entityOf(ce.endEvents[i].shapeIdB),
+             false, false);
+
+    b2SensorEvents se = b2World_GetSensorEvents(world);
+    for (int i = 0; i < se.beginCount; ++i)
+        push(entityOf(se.beginEvents[i].sensorShapeId), entityOf(se.beginEvents[i].visitorShapeId),
+             true, true);
+    for (int i = 0; i < se.endCount; ++i)
+        push(entityOf(se.endEvents[i].sensorShapeId), entityOf(se.endEvents[i].visitorShapeId),
+             false, true);
 }
 
 bool PhysicsWorld::AddBody(Scene& scene, Entity e) {
@@ -122,8 +169,16 @@ bool PhysicsWorld::AddBody(Scene& scene, Entity e) {
         sd.filter.categoryBits = rb.Category;
         sd.filter.maskBits = rb.Mask;
         sd.filter.groupIndex = rb.GroupIndex;
-        b2Polygon box = b2MakeBox(col.Size.x * 0.5f, col.Size.y * 0.5f);
-        b2CreatePolygonShape(body, &sd, &box);
+        // Circle (radius + offset) when Radius > 0, box (half-extents from
+        // Size) otherwise. Radius > 0 is the CircleCollider2D signal; a box
+        // collider keeps its size semantic.
+        if (col.Radius > 0.0f) {
+            b2Circle circle = {b2Vec2_zero, col.Radius};
+            b2CreateCircleShape(body, &sd, &circle);
+        } else {
+            b2Polygon box = b2MakeBox(col.Size.x * 0.5f, col.Size.y * 0.5f);
+            b2CreatePolygonShape(body, &sd, &box);
+        }
     }
 
     m_impl->bodies[e.Id()] = body;
@@ -136,6 +191,14 @@ bool PhysicsWorld::RemoveBody(Entity e) {
     if (it == m_impl->bodies.end()) return false;
     b2DestroyBody(it->second);
     m_impl->bodies.erase(it);
+    // Purge queued pairs mentioning this entity: Box2D emits an end-touch on
+    // destroy, which we may already have drained — either way no stale pair
+    // may survive to mislead the next poll (Area2D/pickup correctness).
+    auto& evs = m_impl->events;
+    evs.erase(std::remove_if(evs.begin(), evs.end(), [&](const RawEvent& ev) {
+                  return ev.idA == e.Id() || ev.idB == e.Id();
+              }),
+              evs.end());
     return true;
 }
 
@@ -152,6 +215,7 @@ void PhysicsWorld::Step(Scene& scene, float dt) {
     m_impl->accumulator += dt;
     while (m_impl->accumulator >= Impl::kFixedStep) {
         b2World_Step(m_impl->world, Impl::kFixedStep, Impl::kSubSteps);
+        DrainEvents(m_impl->world, m_impl->events); // buffers reset per step!
         m_impl->accumulator -= Impl::kFixedStep;
     }
 
@@ -223,6 +287,46 @@ Vec2 PhysicsWorld::GetGravity() const {
     if (!m_impl->created) return {0.0f, 0.0f};
     b2Vec2 g = b2World_GetGravity(m_impl->world);
     return {g.x, g.y};
+}
+
+std::vector<PhysicsWorld::CollisionEvent> PhysicsWorld::PollCollisionEvents(Scene& scene) {
+    std::vector<CollisionEvent> out;
+    if (!m_impl->created) return out;
+
+    // Live-entity set: resolves raw ids to handles, dropping stale ids from
+    // entities destroyed since the event fired (Box2D lets shapes go stale).
+    std::unordered_set<uint32_t> live;
+    for (const Entity& e : scene.Entities())
+        live.insert(e.Id());
+
+    out.reserve(m_impl->events.size());
+    for (const auto& raw : m_impl->events) {
+        if (live.find(raw.idA) == live.end() || live.find(raw.idB) == live.end())
+            continue; // participant gone — skip stale pair
+        CollisionEvent ev;
+        ev.entityA = Entity(&scene, raw.idA);
+        ev.entityB = Entity(&scene, raw.idB);
+        ev.begun = raw.began;
+        ev.sensor = raw.sensor;
+        out.push_back(ev);
+    }
+    m_impl->events.clear(); // drained exactly once, like Box2D's buffers
+    return out;
+}
+
+bool PhysicsWorld::SensorTouched(Scene& scene, Entity sensorEntity, Entity otherEntity) const {
+    if (!m_impl->created || !sensorEntity.Valid() || !otherEntity.Valid()) return false;
+    if (sensorEntity.Id() == otherEntity.Id()) return false; // self never counts
+    for (const auto& raw : m_impl->events) {
+        if (!raw.sensor || !raw.began) continue;
+        // Buffer is canonical (min first) — normalize the query the same way.
+        uint32_t lo = sensorEntity.Id(), hi = otherEntity.Id();
+        if (hi < lo) std::swap(lo, hi);
+        if (raw.idA == lo && raw.idB == hi) return true;
+    }
+    (void)scene; // ids resolve through PhysicsWorld's own bookkeeping; scene
+                 // kept for API symmetry with PollCollisionEvents.
+    return false;
 }
 
 PhysicsWorld::RaycastHit PhysicsWorld::Raycast(Scene& scene, const Vec2& origin,
