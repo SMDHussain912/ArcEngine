@@ -67,6 +67,17 @@ int main() {
     pillCol.Radius = 0.25f;
     pillCol.Height = 1.0f;
 
+    // Polygon collider (P1 Step 7): >= 3 local-space convex vertices (diamond).
+    Arc::Entity rock = sceneA.CreateEntity("Rock");
+    rock.GetComponent<Arc::TransformComponent>().Position = {4.0f, -5.0f, 0.0f};
+    rock.AddComponent<Arc::RigidBody2DComponent>().Type = Arc::RigidBodyType::Dynamic;
+    auto& rockCol = rock.AddComponent<Arc::BoxCollider2DComponent>();
+    rockCol.VertexCount = 4;
+    rockCol.Vertices[0] = {0.7f, 0.0f};
+    rockCol.Vertices[1] = {0.0f, 0.7f};
+    rockCol.Vertices[2] = {-0.7f, 0.0f};
+    rockCol.Vertices[3] = {0.0f, -0.7f};
+
     // A bare entity: must stay free of physics components after round-trip.
     Arc::Entity plain = sceneA.CreateEntity("Plain");
 
@@ -126,8 +137,8 @@ int main() {
     }
     CHECK(foundBox, "Box entity survives save/load");
     CHECK(foundGround, "Ground entity survives save/load");
-    // Circle + capsule collider round-trips (P1 Steps 5+6).
-    bool foundBall = false, foundPill = false;
+    // Circle + capsule + polygon collider round-trips (P1 Steps 5-7).
+    bool foundBall = false, foundPill = false, foundRock = false;
     for (Arc::Entity e : loaded.Entities()) {
         if (e.Name() == "Ball") {
             foundBall = true;
@@ -140,10 +151,21 @@ int main() {
             const auto& c = e.GetComponent<Arc::BoxCollider2DComponent>();
             CHECK(Near(c.Radius, 0.25f), "capsule cap radius round-trip");
             CHECK(Near(c.Height, 1.0f), "capsule height round-trip");
+        } else if (e.Name() == "Rock") {
+            foundRock = true;
+            const auto& c = e.GetComponent<Arc::BoxCollider2DComponent>();
+            CHECK(c.VertexCount == 4, "polygon vertex count round-trip");
+            CHECK(Near(c.Vertices[0].x, 0.7f) && Near(c.Vertices[0].y, 0.0f),
+                  "polygon vertex 0 round-trip");
+            CHECK(Near(c.Vertices[3].x, 0.0f) && Near(c.Vertices[3].y, -0.7f),
+                  "polygon vertex 3 round-trip");
+            CHECK(Near(c.Radius, 0.0f) && Near(c.Height, 0.0f),
+                  "rock has no radius/height (polygon signal only)");
         }
     }
     CHECK(foundBall, "Ball entity survives save/load");
     CHECK(foundPill, "Pill entity survives save/load");
+    CHECK(foundRock, "Rock entity survives save/load");
 
     std::remove(tmpPath);
     std::printf("test_physics_serialize: ALL OK\n");

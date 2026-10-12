@@ -591,13 +591,21 @@ void ArcEditor::RenderSceneToFBO(int w, int h) {
             glDeleteVertexArrays(1, &ba);
             m_sceneShader->Bind();
         }
-        // P1 Step 2/Steps 5+6: physics collider outline. Capsule when
-        // Height > 0, circle when Radius > 0, box otherwise — same
-        // most-specific-first selection AddBody uses for the real shape.
+        // P1 Step 2/Steps 5-7: physics collider outline. Polygon when
+        // VertexCount >= 3, capsule when Height > 0, circle when Radius > 0,
+        // box otherwise — same most-specific-first selection AddBody uses.
         if (m_showColliders && e.HasComponent<BoxCollider2DComponent>()) {
             const auto& col = e.GetComponent<BoxCollider2DComponent>();
             std::vector<float> verts;
-            if (col.Height > 0.0f) {
+            if (col.VertexCount >= 3) {
+                // Polygon outline: local-space vertices + body position.
+                int n = col.VertexCount > 8 ? 8 : col.VertexCount;
+                verts.reserve(static_cast<size_t>(n) * 2);
+                for (int i = 0; i < n; ++i) {
+                    verts.push_back(t.Position.x + col.Vertices[i].x);
+                    verts.push_back(t.Position.y + col.Vertices[i].y);
+                }
+            } else if (col.Height > 0.0f) {
                 // Vertical capsule: two straight sides + semicircular caps
                 // around (x, y ± H/2), walked counter-clockwise from the
                 // right-bottom edge; start point repeated to close.
@@ -663,7 +671,8 @@ void ArcEditor::RenderSceneToFBO(int w, int h) {
             if (col.Radius > 0.0f || col.Height > 0.0f)
                 glDrawArrays(GL_LINE_STRIP, 0, static_cast<int>(verts.size() / 2));
             else
-                glDrawArrays(GL_LINE_LOOP, 0, 4);
+                // Box and polygon outlines close themselves (4 / VertexCount).
+                glDrawArrays(GL_LINE_LOOP, 0, static_cast<int>(verts.size() / 2));
             glBindVertexArray(0);
             glDeleteBuffers(1, &cv);
             glDeleteVertexArrays(1, &ca);
@@ -1530,6 +1539,22 @@ void ArcEditor::InspectorWindow() {
             if (ImGui::DragFloat("Height (0 = box/circle)", &col.Height, 0.01f, 0.0f,
                                  100.0f, "%.2f"))
                 m_dirty = true;
+            // Polygon (P1 Step 7): >= 3 local-space vertices select the polygon
+            // shape (hull-validated at Play; degenerate falls back to box).
+            if (ImGui::InputInt("Poly verts (0=box)", &col.VertexCount)) {
+                if (col.VertexCount < 0) col.VertexCount = 0;
+                if (col.VertexCount > 8) col.VertexCount = 8;
+                m_dirty = true;
+            }
+            for (int i = 0; i < col.VertexCount; ++i) {
+                ImGui::PushID(i);
+                char lbl[8];
+                std::snprintf(lbl, sizeof(lbl), "V%d", i);
+                if (ImGui::DragFloat2(lbl, &col.Vertices[i].x, 0.01f, -100.0f, 100.0f,
+                                      "%.2f"))
+                    m_dirty = true;
+                ImGui::PopID();
+            }
             if (ImGui::DragFloat("Density", &col.Density, 0.01f, 0.0f, 100.0f, "%.2f"))
                 m_dirty = true;
             if (ImGui::DragFloat("Friction", &col.Friction, 0.005f, 0.0f, 1.0f, "%.3f"))

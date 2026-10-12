@@ -84,13 +84,18 @@ struct RigidBody2DComponent {
 // wrapper converts it to Box2D half-extents. No collider = body with no shape.
 struct BoxCollider2DComponent {
     Vec2 Size{1.0f, 1.0f};
-    // Shape selection (P1 Steps 5+6), most-specific first:
-    //   Height > 0  -> capsule (segment length Height, end-cap radius Radius)
-    //   Radius  > 0 -> circle
-    //   otherwise   -> box (half-extents from Size)
+    // Shape selection (P1 Steps 5-7), most-specific first:
+    //   VertexCount >= 3 -> convex polygon (local-space Vertices, hull-checked)
+    //   Height > 0       -> capsule (segment length Height, end-cap radius Radius)
+    //   Radius  > 0      -> circle
+    //   otherwise        -> box (half-extents from Size)
     // Defaults keep legacy scenes as boxes.
     float Radius = 0.0f;       // circle/capsule radius (0 = box)
     float Height = 0.0f;       // capsule segment length (0 = box/circle)
+    // Polygon vertices in LOCAL space (P1 Step 7), fixed 8 = B2_MAX_POLYGON_VERTICES.
+    // Invalid hulls (collinear/non-convex-to-be) fall back to box at AddBody with an error log.
+    Vec2 Vertices[8]{};
+    int VertexCount = 0;       // 0..8; >= 3 selects the polygon shape
     float Density = 1.0f;      // kg/m^2 (drives mass; ignored for static bodies)
     float Friction = 0.3f;     // Coulomb friction [0,1]
     float Restitution = 0.0f;  // bounciness [0,1]

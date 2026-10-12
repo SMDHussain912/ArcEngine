@@ -192,6 +192,59 @@ int main() {
         pw.Destroy();
     }
 
+    // --- 4c. Polygon shape: diamond rests on its vertex; degenerate hull
+    // falls back to box. Diamond half-diagonal 0.7 => rest y = 0.5 + 0.7 =
+    // 1.2; a box (Size 1x1) would rest at 1.0, so only the real b2Polygon
+    // passes the > 1.1 lower bound. ---
+    {
+        Arc::Scene s;
+        auto floor = s.CreateEntity("Floor");
+        auto& frb = floor.AddComponent<Arc::RigidBody2DComponent>();
+        frb.Type = Arc::RigidBodyType::Static;
+        auto& fcol = floor.AddComponent<Arc::BoxCollider2DComponent>();
+        fcol.Size = {100.0f, 1.0f}; // box (no radius/height/vertices)
+
+        auto rock = s.CreateEntity("Rock");
+        rock.GetComponent<Arc::TransformComponent>().Position = {0.0f, 5.0f, 0.0f};
+        auto& rrb = rock.AddComponent<Arc::RigidBody2DComponent>();
+        rrb.Type = Arc::RigidBodyType::Dynamic;
+        rrb.FixedRotation = true; // stay vertex-down (no toppling)
+        auto& rcol = rock.AddComponent<Arc::BoxCollider2DComponent>();
+        rcol.VertexCount = 4;
+        rcol.Vertices[0] = {0.7f, 0.0f};
+        rcol.Vertices[1] = {0.0f, 0.7f};
+        rcol.Vertices[2] = {-0.7f, 0.0f};
+        rcol.Vertices[3] = {0.0f, -0.7f};
+
+        // Degenerate polygon: three collinear points -> empty hull -> box
+        // fallback (Size 1x1) with an error log. Must NOT crash and must
+        // still land like a box.
+        auto deg = s.CreateEntity("Deg");
+        deg.GetComponent<Arc::TransformComponent>().Position = {3.0f, 5.0f, 0.0f};
+        deg.AddComponent<Arc::RigidBody2DComponent>().Type =
+            Arc::RigidBodyType::Dynamic;
+        auto& dcol = deg.AddComponent<Arc::BoxCollider2DComponent>();
+        dcol.VertexCount = 3;
+        dcol.Vertices[0] = {0.0f, 0.0f};
+        dcol.Vertices[1] = {0.5f, 0.0f};
+        dcol.Vertices[2] = {1.0f, 0.0f};
+
+        Arc::PhysicsWorld pw;
+        pw.Create();
+        CHECK(pw.AddBody(s, floor), "floor body added");
+        CHECK(pw.AddBody(s, rock), "polygon body added");
+        CHECK(pw.AddBody(s, deg), "degenerate polygon still adds (box fallback)");
+        RunSeconds(pw, s, 3.0f);
+
+        float yRock = rock.GetComponent<Arc::TransformComponent>().Position.y;
+        float yDeg = deg.GetComponent<Arc::TransformComponent>().Position.y;
+        CHECK(yRock > 1.1f && yRock < 1.3f,
+              "diamond rests on vertex (0.5 + 0.7 = 1.2, box would be 1.0)");
+        CHECK(yDeg > 0.9f && yDeg < 1.2f,
+              "degenerate hull falls back to box rest height");
+        pw.Destroy();
+    }
+
     // --- 5. Entities without rigid bodies / post-destroy are safe no-ops ---
     {
         Arc::Scene s;

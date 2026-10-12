@@ -192,6 +192,12 @@ bool SceneSerializer::Save(Scene& scene, const std::string& path) {
             ccn["size"] = Vec2Node(col.Size);
             ccn["radius"] = col.Radius;
             ccn["height"] = col.Height;
+            if (col.VertexCount >= 3) {
+                YAML::Node poly;
+                int n = col.VertexCount > 8 ? 8 : col.VertexCount;
+                for (int i = 0; i < n; ++i) poly.push_back(Vec2Node(col.Vertices[i]));
+                ccn["polygon"] = poly;
+            }
             ccn["density"] = col.Density;
             ccn["friction"] = col.Friction;
             ccn["restitution"] = col.Restitution;
@@ -344,6 +350,16 @@ bool SceneSerializer::Load(const std::string& path, Scene& outScene) {
                 col.Size = NodeVec2(ccn["size"], col.Size);
                 col.Radius = ccn["radius"] ? ccn["radius"].as<float>(0.0f) : 0.0f;
                 col.Height = ccn["height"] ? ccn["height"].as<float>(0.0f) : 0.0f;
+                if (ccn["polygon"] && ccn["polygon"].IsSequence()) {
+                    // Clamp to the fixed 8-vertex budget; hull validation
+                    // happens at AddBody (degenerate -> box fallback).
+                    int n = static_cast<int>(ccn["polygon"].size());
+                    if (n > 8) n = 8;
+                    for (int i = 0; i < n; ++i)
+                        col.Vertices[i] =
+                            NodeVec2(ccn["polygon"][i], Vec2(0.0f, 0.0f));
+                    col.VertexCount = n;
+                }
                 col.Density = ccn["density"] ? ccn["density"].as<float>(1.0f) : 1.0f;
                 col.Friction = ccn["friction"] ? ccn["friction"].as<float>(0.3f) : 0.3f;
                 col.Restitution = ccn["restitution"] ? ccn["restitution"].as<float>(0.0f) : 0.0f;

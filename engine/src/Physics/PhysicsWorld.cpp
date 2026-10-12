@@ -169,13 +169,29 @@ bool PhysicsWorld::AddBody(Scene& scene, Entity e) {
         sd.filter.categoryBits = rb.Category;
         sd.filter.maskBits = rb.Mask;
         sd.filter.groupIndex = rb.GroupIndex;
-        // Shape selection (P1 Steps 5+6), most-specific first:
-        //   Height > 0  -> capsule (vertical segment of length Height + Radius caps)
-        //   Radius  > 0 -> circle
-        //   otherwise   -> box (half-extents from Size)
-        // The vertical capsule is the platformer body: rounded ends roll over
-        // step edges instead of snagging them.
-        if (col.Height > 0.0f) {
+        // Shape selection (P1 Steps 5-7), most-specific first:
+        //   VertexCount >= 3 -> convex polygon (hull-validated; falls back to
+        //                       box with an error log if b2ComputeHull fails)
+        //   Height > 0       -> capsule (vertical segment + Radius caps)
+        //   Radius  > 0      -> circle
+        //   otherwise        -> box (half-extents from Size)
+        if (col.VertexCount >= 3) {
+            b2Vec2 pts[8];
+            int n = col.VertexCount > 8 ? 8 : col.VertexCount;
+            for (int i = 0; i < n; ++i)
+                pts[i] = {col.Vertices[i].x, col.Vertices[i].y};
+            b2Hull hull = b2ComputeHull(pts, n);
+            if (hull.count >= 3) {
+                b2Polygon poly = b2MakePolygon(&hull, 0.0f);
+                b2CreatePolygonShape(body, &sd, &poly);
+            } else {
+                Arc::Log::Error("PhysicsWorld: degenerate polygon on entity " +
+                                std::to_string(e.Id()) + " (collinear/insufficient " +
+                                "points) — falling back to box");
+                b2Polygon box = b2MakeBox(col.Size.x * 0.5f, col.Size.y * 0.5f);
+                b2CreatePolygonShape(body, &sd, &box);
+            }
+        } else if (col.Height > 0.0f) {
             b2Capsule cap;
             cap.center1 = {0.0f, -col.Height * 0.5f};
             cap.center2 = {0.0f, col.Height * 0.5f};
