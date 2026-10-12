@@ -14,12 +14,48 @@
 - [x] Editor: Inspector UI + add/remove + viewport collider outlines + stepping only in Play — `engine/src/Editor/ArcEditor.cpp`
 - [x] .arc: rigidbody2d + boxcollider2d + category/mask/group_index round-trip — `tests/test_physics_serialize.cpp`
 - [~] Step 4 Collision events (IN PROGRESS): header declares CollisionEvent + PollCollisionEvents + SensorTouched; left: finish DrainEvents wiring in Step(), RemoveBody/Destroy guards, test_physics_events.cpp
-- [ ] Step 5 CircleCollider2D: radius + offset shape, .arc round-trip, viewport circle outline
-- [ ] Step 6 Joints: RevoluteJoint2D + DistanceJoint2D components (anchorA/anchorB, limits, motor lite), .arc, test
-- [ ] Step 7 CharacterBody2D: kinematic move-and-slide helper (velocity, snap, floor normal), test on slopes/steps
-- [ ] Step 8 Area2D triggers: sensor-only body + OnAreaEnter/Exit via events (coin pickup path)
-- [ ] Step 9 Debug draw: polygon/circle outlines + contact points in viewport (toggle)
+- [ ] Step 5 CircleCollider2D: radius + offset, .arc round-trip, viewport circle outline — `tests/test_physics_shapes.cpp`
+- [ ] Step 6 CapsuleCollider2D: height + radius (Box2D native capsule, platformer bodies that don't snag steps), .arc, viewport outline
+- [ ] Step 7 PolygonCollider2D: convex vertices ≤8 (slopes/ramps/rocks via b2ComputeHull), vertex validation, .arc, viewport outline
+- [ ] Step 8 ChainCollider2D (static ground outlines, one-sided segments/loop) + EdgeCollider2D lite, .arc
+- [ ] Step 9 Compound bodies: N shapes per body (box + sensor-feet pattern), per-shape material + per-shape sensor flag, AddShape/RemoveShape API, test
+- [ ] Step 10 Joints: RevoluteJoint2D + DistanceJoint2D (anchorA/anchorB, limits, motor lite), PrismaticJoint2D stretch, WeldJoint2D lite, .arc, test
+- [ ] Step 11 CharacterBody2D: kinematic move-and-slide helper (velocity, snap, floor normal, coyote-time lite), test on slopes/steps
+- [ ] Step 12 Area2D triggers: sensor-only body + OnAreaEnter/Exit via events (coin pickup path), test
+- [ ] Step 13 Debug draw: shape outlines (all types) + contact points + AABBs in viewport (toggle)
+- [ ] Step 14 Named layers v2: 32 named physics/render layers ("Player","Ground") replacing raw hex Category/Mask, editor dropdown, .arc by name
 - [ ] P1 demo: `projects/demo_2d/` platformer .arc (player + platforms + coins + blip) + `examples/09-*`; accept: 60fps collisions on Intel HD 620
+
+### GUI system v1 — runtime UI (today: 3 widget kinds, editor-viewport-only, ZERO runtime draw/input — buttons you can't press)
+> Problems to fix: (1) no runtime renderer — GuiComponent invisible in ArcRuntime; (2) no input — no hover/press/click/focus; (3) only Button/Label/Panel — missing CheckBox/Slider/TextField/etc; (4) fixed world pos — breaks on resize, no anchors/layout; (5) no text rendering — stb_truetype vendored but unused; (6) per-widget colors — no shared theme; (7) no callbacks — gameplay can't react.
+- [ ] Step G1 GuiRenderer: screen-space overlay pass in runtime (camera-independent, resolution-aware), draws Panel (rounded rect) + Label (font atlas) + Button (normal/hover/pressed states) — `engine/*/Gui/GuiRenderer.*`, `examples/10-gui`
+- [ ] Step G2 Input + focus: mouse hover/press/release hit-testing (top-most first), keyboard focus chain (Tab), click-consume so game doesn't double-fire, test headless with synthetic input
+- [ ] Step G3 Widgets pack 1: CheckBox (toggled bool), Slider (float min/max/step + drag), ProgressBar (0..1 fill), Image/Icon (texture + tint + UV)
+- [ ] Step G4 Widgets pack 2: TextField (focus, caret, typing, backspace, max-length), Dropdown (option list popup), ScrollView (clip + scrollbar), Tooltip (hover delay text)
+- [ ] Step G5 Anchors + layout: anchor presets (top-left/center/full-rect...), HBox/VBox containers (padding/spacing), auto-resize on window change, min-size clamp
+- [ ] Step G6 Text engine: stb_truetype font atlas (ASCII + Latin-1), size/align/word-wrap/ellipsis, Label auto-size, .arc font path
+- [ ] Step G7 Theme/skins: one GuiTheme struct (colors, corner radius, padding, font size) shared by all widgets, editor theme editor lite, .arc theme block
+- [ ] Step G8 Callbacks: on_pressed / on_toggled / on_value_changed (C++ std::function now, Lua bindings in P5), signal connect/disconnect API, test
+- [ ] Step G9 Editor: Inspector UI for every widget (all fields), widget creation menu, viewport widget outlines + click-to-select, .arc round-trip for all widgets — extend `tests/test_scene.cpp` or new `tests/test_gui.cpp`
+- [ ] GUI demo: `examples/10-gui` main-menu (title + Play/Quit buttons + volume slider + name field) driving real state; accept: mouse-only navigation, resize-safe
+
+### Gameplay systems (engine is basic without these — nothing animates/moves/scrolls today)
+- [ ] SpriteSheet animation: frame grid (cols/rows/fps/loop/pingpong), AnimationPlayer lite (play/stop/speed, frame events), .arc, test — `examples/11-animation`
+- [ ] Tween engine: pos/scale/alpha/rotation easings (linear/quad/cubic/sine, in/out), chaining + callbacks, test
+- [ ] Particles v1: CPU emitter (rate, life, velocity spread, gravity, tint fade, size curve), ONE batched draw, pooling, `examples/12-particles`
+- [ ] TileMap: grid + tileset atlas + batched chunk draw + autotile-lite (bitmask 16-tile), collision import from tile flags, `examples/13-tilemap`
+- [ ] Camera2D: follow target + deadzone + lookahead, trauma shake, bounds limits, zoom smoothing, editor preview
+- [ ] ParallaxBackground: layered scroll factors + infinite wrap (modulo), editor layer list
+- [ ] SaveGame system: save slots (JSON-ish over .arc helpers), auto-save lite, version field + migration note, test
+- [ ] Object pooling: generic Pool<T> (bullets/enemies/particles), prewarm + grow cap, test
+
+### Engine-quality basics
+- [ ] Prefabs: save entity subtree → stamp copies (enemies/bullets/coins), override lite, .arc prefab files, test
+- [ ] Tags + Groups: string tags per entity, FindWithTag/FindInGroup, group broadcast call, test
+- [ ] Undo for everything: extend undo/redo beyond transforms (component add/remove/edit, physics fields, GUI fields)
+- [ ] Profiler overlay: frame ms + physics ms + draw calls + binds + body count (surface existing counters), toggle F3, log-to-file lite
+- [ ] Asset browser panel: real file view + import status (today stub), double-click open, drag-to-scene lite
+- [ ] Headless CI: `cmake --build` + ALL tests in GitHub Actions (linux-runner, no GL needed for headless suites)
 
 ### Rendering 2D
 - [x] SpriteComponent + SpriteBatch (layer+texture sort, 1 draw/bind) — `examples/07-sprites`
@@ -69,5 +105,7 @@
 
 ## Next up (agreed order)
 1. Finish Step 4 collision events (drain wiring + test + push).
-2. Step 5 CircleCollider2D.
-3. Step 6 Joints (revolute + distance).
+2. Steps 5–8 more collider shapes (circle → capsule → polygon → chain).
+3. GUI v1 starts: G1 renderer + G2 input (buttons you can actually press).
+4. SpriteSheet animation + Tween (things start moving).
+5. Camera2D + Particles v1 + TileMap (levels with juice).
