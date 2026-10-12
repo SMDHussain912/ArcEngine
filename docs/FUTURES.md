@@ -40,9 +40,7 @@
 - [ ] GUI demo: `examples/10-gui` main-menu (title + Play/Quit buttons + volume slider + name field) driving real state; accept: mouse-only navigation, resize-safe
 
 ### Gameplay systems (engine is basic without these — nothing animates/moves/scrolls today)
-- [ ] SpriteSheet animation: frame grid (cols/rows/fps/loop/pingpong), AnimationPlayer lite (play/stop/speed, frame events), .arc, test — `examples/11-animation`
-- [ ] Tween engine: pos/scale/alpha/rotation easings (linear/quad/cubic/sine, in/out), chaining + callbacks, test
-- [ ] Particles v1: CPU emitter (rate, life, velocity spread, gravity, tint fade, size curve), ONE batched draw, pooling, `examples/12-particles`
+> Animation + particles live in their own section below (A1–A10) — bigger than first scoped.
 - [ ] TileMap: grid + tileset atlas + batched chunk draw + autotile-lite (bitmask 16-tile), collision import from tile flags, `examples/13-tilemap`
 - [ ] Camera2D: follow target + deadzone + lookahead, trauma shake, bounds limits, zoom smoothing, editor preview
 - [ ] ParallaxBackground: layered scroll factors + infinite wrap (modulo), editor layer list
@@ -96,7 +94,7 @@
 ### 3D Gameplay + world
 - [ ] Step 3D-14 ThirdPersonController: follow cam + collision (raycast pull-in), input-relative movement, jump/ coyote, test scene
 - [ ] Step 3D-15 Level streaming (World-Partition-lite): chunked collections + load radius, async decode queue, loading screen hook, `projects/demo_3d/` playground .arc
-- [ ] Step 3D-16 3D particles + trails: billboarded GPU points, ribbon trails (sword swings, wheels), collision-lite (floor kill plane)
+- [ ] Step 3D-16 see A10 (3D particles + trails merged into Animation section)
 - [ ] Step 3D-17 Sky + weather lite: time-of-day curve (sun angle/color, CanvasModulate-3D), rain/snow particle presets, puddle-roughness note
 - [ ] Lua 3D API: transform3d, camera helpers, spawn_model; accept: lit 3D level + rigid bodies + orbit cam, GLES-compatible shaders
 - [ ] P2 demo: `examples/14-model3d` lit glTF room + falling crates + orbit camera — tag v1.0-p2
@@ -139,8 +137,34 @@
 - [ ] docs/LUA_API.md generated from bindings + examples; accept: Lua-only 2D mini-game, zero recompile
 - [ ] Visual nodes: scope + prototype AFTER V1 ships (Lua stays primary)
 
+### Animation system (was 3 thin lines — now the full Godot/Spine-inspired stack)
+> Today: "frame grid" + "Tween lite" + "clip player" — NO state machine, NO tool, NO Spine, NO IK.
+> Research: Unity Shuriken (modular emission/shape/curves/trails/sub-emitters), Spine (bones+attachments+IK+skins+blend, tiny data, spine-c runtime), Godot AnimationTree (states+transitions+Blend2D+crossfade).
+- [ ] Step A1 SpriteSheet v1: frame grid (cols/rows/fps/loop/pingpong), flipbook player (play/stop/speed), frame events ("footstep on frame 12"), .arc, test — `examples/11-animation`
+- [ ] Step A2 Tween engine: pos/scale/alpha/rotation easings (linear/quad/cubic/sine in-out), chaining + callbacks + kill, test
+- [ ] Step A3 AnimationPlayer (any-property tracks): keyframes on transform/modulate/light/UI values, dopesheet editor panel (timeline + keys + tangents), .arc clips — THE animator foundation
+- [ ] Step A4 AnimationTree (YOU CAUGHT THIS — was missing): state machine (idle/run/jump nodes, transitions with conditions, crossfade time), Blend2D directional + 1D blend, additive layers (walk+shoot), editor state-graph panel, test
+- [ ] Step A5 IK 2-bone (2D + 3D): foot planting on ground, look-at/aim procedural layer, pole targets, editor IK preview
+- [ ] Step A6 Root motion: movement extracted from animation delta (authoritative for fighters), loop-match + snap-back guard, test
+- [ ] Step A7 Spine 2D (vendor spine-c): bones+slots+attachments, skins/outfit swap, IK + FFD-lite, animation mix/crossfade, bounding-box → Box2D sensor import, `examples/17-spine`
+- [ ] Step A8 Retargeting (promote from V1.1): same-skeleton clip reuse across characters, bone-name map + scale adjust, test on 2 rigs
+- [ ] Step A9 2D particles v2 (Shuriken-lite): Emission (rate/burst) + Shape (cone/sphere/box/circle) + Velocity/Color/Size-over-lifetime CURVES + Noise (curl-lite) + Trails + Sub-emitters (explosion→smoke) + Collision (bounce planes), curve editor panel, ONE batched draw, `examples/12-particles`
+- [ ] Step A10 3D particles + trails: billboarded GPU points, ribbon trails (swords/wheels), floor kill plane, collision-lite — merge with 3D-16
+
+### Game feel + game-loop plumbing (invisible, every shipped game needs)
+- [ ] Time system: global time-scale (slow-mo/hit-stop/pause), per-group scale (UI ignores pause), fixed-step accumulator guard already have — add interpolation flag, test
+- [ ] Scene manager: change_scene + additive load + unload, loading screen (progress + tips), transitions (fade/wipe/slide), scene stack for pause menus, test
+- [ ] Juice kit (OUR LANE): hit-stop frames, screen shake (trauma-based, 2D+3D), kill-flash + hit-flash material pulse, damage numbers + floating text pool, squash-and-stretch helper, landing dust hook — `examples/18-juice`
+- [ ] Dialogue + quests: dialogue tree nodes (line/choice/condition/jump) + portraits + typewriter + skip, quest log (objective/check/reward), .arc dialogue files, `examples/19-dialogue`
+- [ ] Music system: crossfade player, layered stems (combat drums fade in), shuffle/mood playlists, duck-on-dialogue, test
+- [ ] Input mapping v2: named actions (jump→Space+PadA+Touch), runtime rebinding UI widget, gamepad (SDL-lite: sticks/triggers/rumble), touch buttons overlay for mobile
+- [ ] Replay system: record inputs per fixed-step → verify determinism (we're already fixed-step single-threaded — free win), replay file + playback, desync detect, netcode foundation note
+- [ ] Debug console: in-game command line (`give_coins 99`, `godmode`, `tp x y`), command registry API, history + autocomplete lite, F8 toggle
+- [ ] Capture + share: screenshot PNG key, GIF-lite recorder (fixed 320px, 10s cap) for sharing moments
+
 ## V1.1+ (deliberately deferred — do NOT build in V1)
-- Networking, navmesh/pathfinding, skeletal animation retargeting, TileMap autotiling, particles v2, consoles, visual scripting v1.
+- Networking, navmesh/pathfinding, TileMap autotiling, consoles, visual scripting v1.
+  (Promoted OUT: skeletal retargeting → A8, particles v2 → A9.)
 
 ## Next up (agreed order)
 1. Finish Step 4 collision events (drain wiring + test + push).
